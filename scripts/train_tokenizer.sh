@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --mem=64g
+#SBATCH --mem=128g
 #SBATCH -c4
 #SBATCH --time=3-0
 #SBATCH --mail-type=FAIL,TIME_LIMIT
