@@ -25,6 +25,8 @@ def download_data(language_code, data_directory):
     print(language_code)
     if language_code == 'zh':
         download_code = 'zh-Hans'
+    elif language_code == 'zht':
+        download_code = 'zh-Hant'
     else:
         download_code = language_code
     try:
