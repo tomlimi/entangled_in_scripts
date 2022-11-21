@@ -1,6 +1,6 @@
 import torch
 from tqdm import tqdm
-from transformers import BertTokenizer, set_seed
+from transformers import XLMRobertaTokenizerFast, set_seed
 import os
 import json
 import numpy as np
@@ -73,7 +73,7 @@ def eval_single_model(args):
     base_name = 'mrr_eval_' if not is_zero_shot else 'mrr_eval_zero_shot'
     logging.info("Output is: ", out_path, ", with base name ", base_name)
     config =json.load(open(model_config_path,'r'))
-    tokenizer = BertTokenizer.from_pretrained(config['tokenizer_path'])
+    tokenizer = XLMRobertaTokenizerFast.from_pretrained(config['tokenizer_path'])
     if truncate_at >= 1:
         if os.path.exists(os.path.join(out_path,f'{base_name+str(truncate_at)}.txt')) and not overwrite:
             logging.info(f"stats already exist at {os.path.join(out_path,f'{base_name+str(truncate_at)}.txt')}, no overwrite. returning. ")
@@ -102,8 +102,8 @@ def eval_single_model(args):
     mrr = np.sum(np.array(mrrs) * np.array(num_of_masked)) / sum(num_of_masked)
     rank_acc = np.sum(np.array(rank_accs) * np.array(num_of_masked)) / sum(num_of_masked)
 
-    logging.info(f"BERT mrr: {mrr}")
-    logging.info(f"BERT rank accuracy: {rank_acc}")
+    logging.info(f"Model mrr: {mrr}")
+    logging.info(f"Model rank accuracy: {rank_acc}")
     # saving the stats:
     if truncate_at < 1:
         truncate_at = "all"

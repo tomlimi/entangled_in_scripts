@@ -27,7 +27,7 @@ seed=1234
 MODEL_CONFIG=$( jq -n \
                   --arg tokenizer_path "$tokenizer_path" \
                   --argjson vs $vocab_size \
-                  --argjson ml 128 \
+                  --argjson ml 256 \
                   --argjson hs 768 \
                   --argjson nl 8 \
                   --argjson nh 6 \
