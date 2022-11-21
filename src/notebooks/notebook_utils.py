@@ -1,11 +1,11 @@
 import os
-from transformers import PreTrainedTokenizerFast
+from transformers import XLMRobertaTokenizerFast
 
 
 # getting tokenizer
 def get_tokenizer(tokenizer_dir, tokenizer_type, lang, alpha, NV):
-    tokenizer_path = os.path.join(tokenizer_dir, tokenizer_type, lang, f"alpha-{alpha}_N-{NV}", "tokenizer.json")
-    return PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
+    tokenizer_path = os.path.join(tokenizer_dir, tokenizer_type, lang, f"alpha-{alpha}_N-{NV}")
+    return XLMRobertaTokenizerFast.from_pretrained(tokenizer_path, unk_token = '<unk>')
 
 
 # alphabet analysis
