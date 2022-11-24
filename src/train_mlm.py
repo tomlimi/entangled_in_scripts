@@ -1,5 +1,6 @@
 import torch
 import argparse
+from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
 
 from transformers import set_seed
 from transformers import XLMRobertaTokenizerFast
@@ -14,10 +15,12 @@ import numpy as np
 from mlm_dataset import LineByLineTextDataset, DataCollatorForLanguageModeling
 from transformers import Trainer, TrainingArguments, EarlyStoppingCallback, IntervalStrategy
 from eval import compute_metrics
+
+logging.basicConfig(level=logging.INFO)
 logging.info(torch.cuda.is_available())
 
 
-def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkpoint=True, data_seed=10, seed=10, eval_and_save_steps=5000, early_stopping_patience=2, initial_learning_rate=5e-5):
+def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkpoint=True, data_seed=10, seed=10, eval_and_save_steps=5000, early_stopping_patience=2, initial_learning_rate=5e-5, gradient_accumulation_steps=8, fp16=True, gradient_checkpointing=False):
     set_seed(seed)
 
     logging.info("Loading tokenizer..")
@@ -44,6 +47,8 @@ def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkp
     # init trainer:
     logging.info("Training\Loading model...")
     logging.info(f"#params:, {model.num_parameters()}")
+    if torch.cuda.is_available():
+        logging.info(f"#memory used:, {memory_used_in_mb()} MB")
 
     if not os.path.exists(os.path.join(pretrain_outpath,'config.json')):
         logging.info("Loading pretrain data..")
@@ -55,9 +60,12 @@ def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkp
             output_dir=pretrain_outpath,
             overwrite_output_dir=True,
             num_train_epochs=pt_config['num_epochs'],
-            per_device_train_batch_size=pt_config['batch_size'],
+            per_device_train_batch_size=pt_config['batch_size']//gradient_accumulation_steps,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            fp16=(fp16 and torch.cuda.is_available()),
+            gradient_checkpointing=gradient_checkpointing,
             save_steps=eval_and_save_steps,
-            per_device_eval_batch_size=256,
+            per_device_eval_batch_size=32,
             save_total_limit=5,
             report_to=['tensorboard'],
             eval_steps=eval_and_save_steps,
@@ -108,6 +116,13 @@ def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkp
 def load_config(config_path):
     with open(config_path, 'r') as fp:
         return json.load(fp)
+
+
+def memory_used_in_mb():
+    nvmlInit()
+    handle = nvmlDeviceGetHandleByIndex(0)
+    info = nvmlDeviceGetMemoryInfo(handle)
+    return info.used//1024**2
 
 
 def train(args):
