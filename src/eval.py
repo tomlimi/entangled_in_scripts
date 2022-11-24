@@ -72,7 +72,7 @@ def eval_single_model(args):
     is_zero_shot = args.is_zero_shot
     out_path = args.out_path if args.out_path is not None else model_dir_path
     base_name = 'mrr_eval_' if not is_zero_shot else 'mrr_eval_zero_shot'
-    logging.info("Output is: ", out_path, ", with base name ", base_name)
+    logging.info(f"Output is: {out_path} with base name: {base_name}")
     config =json.load(open(model_config_path,'r'))
     tokenizer = XLMRobertaTokenizerFast.from_pretrained(config['tokenizer_path'])
     if truncate_at >= 1:
