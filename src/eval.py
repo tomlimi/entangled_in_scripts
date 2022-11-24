@@ -9,6 +9,7 @@ from mlm_dataset import LineByLineTextDataset, DataCollatorForLanguageModeling
 import logging
 from transformers import AutoModelForMaskedLM
 
+logging.basicConfig(level=logging.INFO)
 logging.info(torch.cuda.is_available())
 set_seed(10)
 
