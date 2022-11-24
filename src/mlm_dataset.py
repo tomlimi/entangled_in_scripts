@@ -9,6 +9,8 @@ from transformers.tokenization_utils_base import BatchEncoding, PreTrainedTokeni
 import logging
 rng = np.random.RandomState(2021)
 
+logging.basicConfig(level=logging.INFO)
+
 
 class LineByLineTextDataset(Dataset):
     """
@@ -16,7 +18,6 @@ class LineByLineTextDataset(Dataset):
     """
     def __init__(self, tokenizer, file_paths, block_size, truncate_at, name="", randomize=True, rand_seed=10, is_eval=False):
         rng.seed(rand_seed)
-        logging.info('seed: ',rand_seed)
         input_ids = []
         portion = truncate_at//len(file_paths) if truncate_at!=-1 else -1
         for file_path in file_paths:
@@ -26,13 +27,13 @@ class LineByLineTextDataset(Dataset):
             # that we will soon use fast multithreaded tokenizer from the
             # `tokenizer` repo everywhere =)
 
-            # Solution of tokenization bug for Korean. Morpho-syllabic blocks shouldn't be split
-
             with open(file_path, encoding="utf-8") as f:
                 new_lines = [line for line in tqdm(f.readlines(), desc=f"reading lines {name}, is random: {randomize}") if (len(line) > 0 and not line.isspace())]
                 if portion>=0 and is_eval:
                     new_lines = new_lines[:min(portion,len(new_lines))]
-            input_ids += tokenizer(new_lines, add_special_tokens=True, truncation=True, max_length=block_size)['input_ids']
+                    
+            # TODO: problem with fitting the sentences of full length, that's why max_len is reduced by 2
+            input_ids += tokenizer(new_lines, add_special_tokens=True, truncation=True, max_length=block_size-2)['input_ids']
 
         input_ids = np.array(input_ids)
         indices = np.arange(len(input_ids))
@@ -83,6 +84,7 @@ def _collate_batch(examples, tokenizer):
 
 def tolist(x: Union[List[Any], torch.Tensor]):
     return x.tolist() if isinstance(x, torch.Tensor) else x
+
 
 @dataclass
 class DataCollatorForLanguageModeling:
