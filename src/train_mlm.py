@@ -52,8 +52,11 @@ def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkp
 
     if not os.path.exists(os.path.join(pretrain_outpath,'config.json')):
         logging.info("Loading pretrain data..")
+
+        truncate_eval = 1000 if truncate_at == -1 else min(truncate_at,1000)
+        
         pretrain_dataset = LineByLineTextDataset(tokenizer=tokenizer, file_paths= pt_config['train_data_paths_list'], block_size=model_config['max_sent_len'], truncate_at=truncate_at, name="pretrain train", rand_seed=data_seed)
-        preeval_dataset = LineByLineTextDataset(tokenizer=tokenizer, file_paths=pt_config['eval_data_paths_list'], block_size=model_config['max_sent_len'], truncate_at=truncate_at, name="pretrain eval", rand_seed=data_seed, is_eval=True)
+        preeval_dataset = LineByLineTextDataset(tokenizer=tokenizer, file_paths=pt_config['eval_data_paths_list'], block_size=model_config['max_sent_len'], truncate_at=truncate_eval, name="pretrain eval", rand_seed=data_seed, is_eval=True)
         logging.info("Pretraining model..")
         os.makedirs(pretrain_outpath, exist_ok=True)
         training_args = TrainingArguments(
@@ -65,16 +68,18 @@ def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkp
             fp16=(fp16 and torch.cuda.is_available()),
             gradient_checkpointing=gradient_checkpointing,
             save_steps=eval_and_save_steps,
-            per_device_eval_batch_size=32,
+            per_device_eval_batch_size=64,
             save_total_limit=5,
             report_to=['tensorboard'],
+            logging_steps=max(eval_and_save_steps//100, 10),
             eval_steps=eval_and_save_steps,
             evaluation_strategy=IntervalStrategy.STEPS,
             eval_accumulation_steps=1,
             metric_for_best_model='mrr',
             greater_is_better=True,
             load_best_model_at_end=True,
-            learning_rate=initial_learning_rate
+            learning_rate=initial_learning_rate,
+            warmup_ratio=0.01
         )
         logging.info(f"Reporting to: {training_args.report_to}")
         trainer = Trainer(
@@ -151,9 +156,9 @@ if __name__ == '__main__':
     parser.add_argument('--load_checkpoint',type=bool, required=False, default=True)
     parser.add_argument('--data_seed',type=int, required=False, default=10)
     parser.add_argument('--seed',type=int, required=False, default=10)
-    parser.add_argument('--eval_and_save_steps', type=int, required=False, default=5000)
+    parser.add_argument('--eval_and_save_steps', type=int, required=False, default=1000)
     parser.add_argument('--early_stopping_patience', type=int, required=False, default=20)
-    parser.add_argument('--initial_learning_rate', type=float, required=False, default=2e-2)
+    parser.add_argument('--initial_learning_rate', type=float, required=False, default=5e-4)
 
     args = parser.parse_args()
     logging.info(vars(args))
