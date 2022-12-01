@@ -1,10 +1,11 @@
 #!/bin/bash
-#SBATCH --mem=16g
-#SBATCH -p gpu-troja,gpu-ms
-#SBATCH -N 2
-#SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:2
+#SBATCH --mem=128g
+#SBATCH -N 1
+#SBATCH --cpus-per-task=2
 #SBATCH --time=6-23
+#SBATCH -p gpu-troja,gpu-ms
+#SBATCH --constraint="gpuram40G|gpuram48G"
+#SBATCH --gres=gpu:2
 #SBATCH --mail-type=END,FAIL,TIME_LIMIT
 #SBATCH --mail-user=limisiewicz@ufal.mff.cuni.cz
 #SBATCH --output=/home/limisiewicz/my-luster/entangled-in-scripts/job_outputs/pretrain_model_%j.out
@@ -47,3 +48,5 @@ do
 done
 
 chmod -R 777 $output_path || exit 0;
+
+#sbatch pretrain_model.sh 0.25 0.25 140000 ar tr zh el es en

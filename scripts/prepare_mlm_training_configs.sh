@@ -27,7 +27,7 @@ seed=1234
 MODEL_CONFIG=$( jq -n \
                   --arg tokenizer_path "$tokenizer_path" \
                   --argjson vs $vocab_size \
-                  --argjson ml 256 \
+                  --argjson ml 128 \
                   --argjson hs 768 \
                   --argjson nl 8 \
                   --argjson nh 6 \
@@ -77,5 +77,6 @@ arr_eval="$(sed -e 's/\ *$//g'<<<"${arr_eval}")"
 struct_train_config > "${output_path}/train_config_alpha-${alpha_train}.json"
 echo "Saved: ${output_path}/${lang}/train_config_alpha-${alpha_train}.json"
 
+#source prepare_mlm_training_configs.sh 1 1 120000 ar tr zh el es en
 
 

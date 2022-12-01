@@ -40,3 +40,5 @@ echo "Vocab size: ${vocab_size}"
 echo ""
 
 python train_tokenizer.py -d ${files} -o ${output_path} -a $alpha -l ${langs[@]} -v $vocab_size -t $type -c True
+
+#sbatch train_tokenizer.py 1 sp-unigram ar tr zh el es en
