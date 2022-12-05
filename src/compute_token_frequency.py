@@ -4,9 +4,12 @@ import shutil
 import argparse
 import sys
 import json
+from tqdm import tqdm
 from collections import Counter, OrderedDict
 
 from transformers import XLMRobertaTokenizerFast
+
+logging.basicConfig(level=logging.INFO)
 
 
 def get_tokenizer_path(tokenizer_dir, tokenizer_type, lang, alpha, NV):
@@ -16,7 +19,7 @@ def get_tokenizer_path(tokenizer_dir, tokenizer_type, lang, alpha, NV):
 # getting tokenizer
 def get_tokenizer(tokenizer_dir, tokenizer_type, lang, alpha, NV):
     tokenizer_path = get_tokenizer_path(tokenizer_dir, tokenizer_type, lang, alpha, NV)
-    logging.info("Loading tokenizer from", tokenizer_path)
+    logging.info(f"Loading tokenizer from {tokenizer_path}")
     if not os.path.exists(tokenizer_path):
         raise ValueError(f"Tokenizer not found at {tokenizer_path}")
     return (
@@ -82,10 +85,11 @@ def main(args):
 
     counter = Counter()
     for data_path in data_paths:
+        logging.info(f"Reading lines from {data_path}")
         with open(data_path, "r") as f:
             # go through the file line by line in batches
             # NOTE: we strip the newline character from the end of each line
-            for line_batch in batch(map(lambda s: s.rstrip(), f), batch_size):
+            for line_batch in tqdm(batch(map(lambda s: s.rstrip(), f), batch_size)):
                 for tokenized_line in tokenizer(line_batch)["input_ids"]:
                     counter.update(tokenized_line)
 
