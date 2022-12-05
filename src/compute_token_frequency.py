@@ -1,6 +1,6 @@
-# import torch
 import logging
 import os
+import shutil
 import argparse
 import sys
 import json
@@ -23,6 +23,30 @@ def get_tokenizer(tokenizer_dir, tokenizer_type, lang, alpha, NV):
         XLMRobertaTokenizerFast.from_pretrained(tokenizer_path, unk_token="<unk>"),
         tokenizer_path,
     )
+
+
+def save_token_frequency(tokens_with_freq, decoded_tokens_with_freq, out_path):
+    """Function to save token frequencies and log arguments to a file"""
+
+    # copy current script to the output directory
+    shutil.copyfile(sys.argv[0], os.path.join(out_path, "frequency_script.py"))
+    # save the arguments
+    with open(os.path.join(out_path, "frequency_args.txt"), "w") as log_file:
+        log_file.write(" ".join(sys.argv[1:]))
+
+    for save_name, save_object in [
+        ("token_frequencies.json", tokens_with_freq),
+        ("decoded_token_frequencies.json", decoded_tokens_with_freq),
+    ]:
+        save_path = os.path.join(out_path, save_name)
+        with open(save_path, "w", encoding="utf-8") as outfile:
+            logging.info(f"Writing frequencies to {save_path}")
+            json.dump(
+                OrderedDict(save_object),
+                outfile,
+                indent=2,
+                ensure_ascii=False,
+            )
 
 
 def batch(iterator, batch_size):
@@ -71,20 +95,7 @@ def main(args):
         (id_to_token[token_id], freq) for token_id, freq in tokens_with_freq
     ]
 
-    for save_name, save_object in [
-        ("token_frequencies.json", tokens_with_freq),
-        ("decoded_token_frequencies.json", decoded_tokens_with_freq),
-    ]:
-        # Saving vocab
-        save_path = os.path.join(tokenizer_path, save_name)
-        with open(save_path, "w", encoding="utf-8") as outfile:
-            logging.info(f"Writing frequencies to {save_path}")
-            json.dump(
-                OrderedDict(save_object),
-                outfile,
-                indent=2,
-                ensure_ascii=False,
-            )
+    save_token_frequency(tokens_with_freq, decoded_tokens_with_freq, tokenizer_path)
 
 
 if __name__ == "__main__":
