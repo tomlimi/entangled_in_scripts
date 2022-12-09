@@ -20,6 +20,24 @@ logging.info(torch.cuda.is_available())
 
 
 def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkpoint=True, data_seed=10, seed=10, eval_and_save_steps=5000, early_stopping_patience=2, initial_learning_rate=5e-5, gradient_accumulation_steps=8, fp16=True, gradient_checkpointing=False):
+    """
+    Pretrain a model on a given dataset.
+    :param pretrain_outpath: path to save the pretrain model
+    :param model_config: model configuration
+    :param pt_config: pretrain configuration
+    :param truncate_at: truncate dataset at this number of examples
+    :param load_checkpoint: load checkpoint if exists
+    :param data_seed: seed for the dataset
+    :param seed: seed for the model training
+    :param eval_and_save_steps: evaluate and save model every this number of steps
+    :param early_stopping_patience: early stopping patience
+    :param initial_learning_rate:
+    :param gradient_accumulation_steps:
+    :param fp16:
+    :param gradient_checkpointing:
+    :return:
+    """
+    
     set_seed(seed)
 
     logging.info("Loading tokenizer..")
@@ -49,10 +67,6 @@ def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkp
     # object that PyTorch knows how to perform backprop on):
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizers[0],
-        # mask_token_id=tokenizers[0].mask_token_id,
-        # pad_token_id=tokenizers[0].pad_token_id,
-        # cls_token_id=tokenizers[0].cls_token_id,
-        # sep_token_id=tokenizers[0].sep_token_id,
         vocab_size=len(tokenizers[0]) * len(tokenizers),
         mlm=True, mlm_probability=0.15
     )
@@ -66,8 +80,11 @@ def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkp
         logging.info("Loading pretrain data..")
 
         truncate_eval = 1000 if truncate_at == -1 else min(truncate_at,1000)
-        pretrain_dataset = LineByLineTextDataset(lang_to_tokenizer=lang_to_tokenizers, file_paths= pt_config['train_data_paths_list'], block_size=model_config['max_sent_len'], truncate_at=truncate_at, name="pretrain train", rand_seed=data_seed, language_codes=languages,lang_to_offset=lang_to_offset, is_eval=False)
-        preeval_dataset = LineByLineTextDataset(lang_to_tokenizer=lang_to_tokenizers, file_paths=pt_config['eval_data_paths_list'], block_size=model_config['max_sent_len'], truncate_at=truncate_eval, name="pretrain eval", rand_seed=data_seed, language_codes=languages,lang_to_offset=lang_to_offset, is_eval=True)
+        train_lang_paths = list(zip(pt_config['train_lang_list'], pt_config['train_data_paths_list']))
+        eval_lang_paths = list(zip(pt_config['eval_lang_list'], pt_config['eval_data_paths_list']))
+        
+        pretrain_dataset = LineByLineTextDataset(lang_to_tokenizer=lang_to_tokenizers, lang_paths=train_lang_paths, block_size=model_config['max_sent_len'], truncate_at=truncate_at, name="pretrain train", rand_seed=data_seed, lang_to_offset=lang_to_offset, is_eval=False)
+        preeval_dataset = LineByLineTextDataset(lang_to_tokenizer=lang_to_tokenizers, lang_paths=eval_lang_paths, block_size=model_config['max_sent_len'], truncate_at=truncate_eval, name="pretrain eval", rand_seed=data_seed, lang_to_offset=lang_to_offset, is_eval=True)
 
         logging.info("Pretraining model..")
         os.makedirs(pretrain_outpath, exist_ok=True)

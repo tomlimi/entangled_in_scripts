@@ -8,7 +8,7 @@
 #SBATCH --gres=gpu:2
 #SBATCH --mail-type=END,FAIL,TIME_LIMIT
 #SBATCH --mail-user=limisiewicz@ufal.mff.cuni.cz
-#SBATCH --output=/home/limisiewicz/my-luster/entangled-in-scripts/job_outputs/pretrain_model_%j.out
+#SBATCH --output=/home/limisiewicz/my-luster/entangled-in-scripts/job_outputs/pretrain_model_nooverlap_%j.out
 
 
 alpha=$1

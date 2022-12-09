@@ -10,18 +10,18 @@ from transformers.tokenization_utils_base import BatchEncoding, PreTrainedTokeni
 import logging
 rng = np.random.RandomState(2021)
 
+logging.basicConfig(level=logging.INFO)
+
 
 class LineByLineTextDataset(Dataset):
-    def __init__(self, lang_to_tokenizer, file_paths, block_size, truncate_at=-1, name="", randomize=True, rand_seed=10, is_eval=False, language_codes=None, lang_to_offset=None):
+    def __init__(self, lang_to_tokenizer, lang_paths, block_size, truncate_at=-1, name="", randomize=True, rand_seed=10, is_eval=False, lang_to_offset=None):
         rng.seed(rand_seed)
         logging.info(f"seed: {rand_seed}")
         lang_ids = []
         input_ids = []
 
-        portion = truncate_at//len(file_paths) if truncate_at!=-1 else -1
-        if language_codes:
-            logging.info(f'ids: {language_codes}')
-        for idx, file_path in enumerate(file_paths):
+        portion = truncate_at//len(lang_paths) if truncate_at!=-1 else -1
+        for lang, file_path in lang_paths:
             new_lines=[]
             logging.info(file_path)
             assert os.path.isfile(file_path), "Input file path {} not found".format(file_path)
@@ -31,15 +31,14 @@ class LineByLineTextDataset(Dataset):
             if portion>=0 and is_eval:
                 new_lines = new_lines[:min(portion,len(new_lines))]
 
-            new_input_ids = lang_to_tokenizer[language_codes[idx]](new_lines, add_special_tokens=True, truncation=True, max_length=block_size-2)['input_ids']
-            new_input_ids = [[tok_id + lang_to_offset.get(language_codes[idx], 0) if tok_id > 4 else tok_id for tok_id in ii] for ii in new_input_ids]
+            new_input_ids = lang_to_tokenizer[lang](new_lines, add_special_tokens=True, truncation=True, max_length=block_size-2)['input_ids']
+            new_input_ids = [[tok_id + lang_to_offset.get(lang, 0) if tok_id > 4 else tok_id for tok_id in ii] for ii in new_input_ids]
             input_ids += new_input_ids
 
-            if language_codes is not None:
-                lang_ids += [language_codes[idx]]*len(new_lines)
+            lang_ids += [lang]*len(new_lines)
 
-        if language_codes is not None:
-            assert len(input_ids) == len(lang_ids)
+
+        assert len(input_ids) == len(lang_ids)
 
         lang_ids = np.array(lang_ids)
         input_ids = np.array(input_ids)
@@ -52,14 +51,10 @@ class LineByLineTextDataset(Dataset):
             indices=indices[:truncate_at]
 
         input_ids = input_ids[indices].tolist()
-
-        if language_codes is not None:
-            lang_ids = lang_ids[indices].tolist()
+        lang_ids = lang_ids[indices].tolist()
+        
         self.examples = input_ids
-        if language_codes is not None:
-            self.examples = [{"input_ids": torch.tensor(self.examples[i], dtype=torch.long), "language_ids":lang_ids[i]} for i in tqdm(range(len(indices)), desc=f"extracting tokenized lines {name}, order:{indices[:10]}... with ids")]
-        else:
-            self.examples = [{"input_ids": torch.tensor(self.examples[i], dtype=torch.long), "language_ids":-1} for i in tqdm(range(len(indices)), desc=f"extracting tokenized lines {name}, order:{indices[:10]}...")]
+        self.examples = [{"input_ids": torch.tensor(self.examples[i], dtype=torch.long), "language_ids":lang_ids[i]} for i in tqdm(range(len(indices)), desc=f"extracting tokenized lines {name}, order:{indices[:10]}... with ids")]
 
     def __len__(self):
         return len(self.examples)

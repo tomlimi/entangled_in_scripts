@@ -80,8 +80,6 @@ def eval_single_model(args):
     lang_index = language_list.index(language)
     
     tokenizer = XLMRobertaTokenizerFast.from_pretrained(config['tokenizer_path'][lang_index])
-    lang_to_tokenizer = {language: tokenizer}
-    language_codes = [language]
     # TODO: works only for tokenizers of the same size
     lang_to_offset = {language: len(tokenizer) * lang_index}
     
@@ -100,7 +98,9 @@ def eval_single_model(args):
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer, vocab_size=len(tokenizer) * len(language_list), mlm=True, mlm_probability=0.15
     )
-    ft_eval = LineByLineTextDataset({language: tokenizer}, file_paths=eval_data_paths, block_size=config['max_sent_len'], truncate_at=truncate_at, language_codes=language_codes, lang_to_offset=lang_to_offset, randomize=False)
+    
+    eval_lang_paths = [(language, path) for path in eval_data_paths]
+    ft_eval = LineByLineTextDataset({language: tokenizer}, lang_paths=eval_lang_paths, block_size=config['max_sent_len'], truncate_at=truncate_at, lang_to_offset=lang_to_offset, randomize=False)
 
     logging.info(f"Evaulating {model_dir_path} on {eval_data_paths} with truncate {truncate_at} and zeroshot {is_zero_shot}. Overrite:{overwrite}.")
     # gathering scores:
