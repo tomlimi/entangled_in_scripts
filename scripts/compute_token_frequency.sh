@@ -2,8 +2,8 @@
 #SBATCH --mem=128g
 #SBATCH -c4
 #SBATCH --time=3-0
-#SBATCH --mail-type=FAIL,TIME_LIMIT
-#SBATCH --mail-user=limisiewicz@ufal.mff.cuni.cz
+#SBATCH --mail-type=END,FAIL,TIME_LIMIT
+#SBATCH --mail-user=balhar.j@gmail.com
 #SBATCH --output=/home/limisiewicz/my-luster/entangled-in-scripts/job_outputs/compute_frequency_%j.out
 
 
@@ -14,7 +14,7 @@ langs=${@:4:1000}
 
 alphas=("0.0" "0.25" "0.5" "0.75" "1.0")
 
-cd /home/limisiewicz/my-luster/entangled-in-scripts/entangled_in_scripts/src || exit 1;
+cd /home/$USER/my-luster/entangled-in-scripts/entangled_in_scripts/src || exit 1;
 source /home/limisiewicz/my-luster/entangled-in-scripts/eis/bin/activate
 
 data_file="/lnet/express/work/people/limisiewicz/cc100"

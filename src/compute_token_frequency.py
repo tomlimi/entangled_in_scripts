@@ -5,7 +5,7 @@ import argparse
 import sys
 import json
 from tqdm import tqdm
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 
 from transformers import XLMRobertaTokenizerFast
 
@@ -83,7 +83,7 @@ def main(args):
     # open the train data
     batch_size = 10000
 
-    counter = Counter()
+    counter = {token_id: 0 for token_id in tokenizer.get_vocab().values()}
     for data_path in data_paths:
         logging.info(f"Reading lines from {data_path}")
         with open(data_path, "r") as f:
@@ -91,10 +91,11 @@ def main(args):
             # NOTE: we strip the newline character from the end of each line
             for line_batch in tqdm(batch(map(lambda s: s.rstrip(), f), batch_size)):
                 for tokenized_line in tokenizer(line_batch)["input_ids"]:
-                    counter.update(tokenized_line)
+                    for id in tokenized_line:
+                        counter[id] += 1
 
     id_to_token = {v: k for k, v in tokenizer.get_vocab().items()}
-    tokens_with_freq = counter.most_common()
+    tokens_with_freq = sorted(counter.items(), key=lambda x: x[1], reverse=True)
     decoded_tokens_with_freq = [
         (id_to_token[token_id], freq) for token_id, freq in tokens_with_freq
     ]
