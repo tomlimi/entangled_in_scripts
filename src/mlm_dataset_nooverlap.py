@@ -68,7 +68,7 @@ class LineByLineTextDataset(Dataset):
         return self.examples[i]
 
 
-def _collate_batch(examples, pad_token_id):
+def _collate_batch(examples, tokenizer):
     """Collate `examples` into a batch, using the information in `tokenizer` for padding if necessary."""
     # Tensorize if necessary.
     if isinstance(examples[0], (list, tuple)):
@@ -81,23 +81,26 @@ def _collate_batch(examples, pad_token_id):
         return torch.stack(examples, dim=0)
 
     # If yes, check if we have a `pad_token`.
-    # if tokenizer._pad_token is None:
-    #     raise ValueError(
-    #         "You are attempting to pad samples but the tokenizer you are using"
-    #         f" ({tokenizer.__class__.__name__}) does not have a pad token."
-    #     )
+    if tokenizer._pad_token is None:
+        raise ValueError(
+            "You are attempting to pad samples but the tokenizer you are using"
+            f" ({tokenizer.__class__.__name__}) does not have a pad token."
+        )
 
     # Creating the full tensor and filling it with our data.
     max_length = max(x.size(0) for x in examples)
-    result = examples[0].new_full([len(examples), max_length], pad_token_id)
+    result = examples[0].new_full([len(examples), max_length], tokenizer.pad_token_id)
     for i, example in enumerate(examples):
-        logging.info(f"padding side is always from the right.")
-        result[i, : example.shape[0]] = example
+        if tokenizer.padding_side == "right":
+            result[i, : example.shape[0]] = example
+        else:
+            result[i, -example.shape[0] :] = example
     return result
 
 
 def tolist(x: Union[List[Any], torch.Tensor]):
     return x.tolist() if isinstance(x, torch.Tensor) else x
+
 
 @dataclass
 class DataCollatorForLanguageModeling:
@@ -107,7 +110,7 @@ class DataCollatorForLanguageModeling:
 
     Args:
         tokenizer (:class:`~transformers.PreTrainedTokenizer` or :class:`~transformers.PreTrainedTokenizerFast`):
-            The dictionary mapping language code to tokenizer.
+            The tokenizer used for encoding the data.
         mlm (:obj:`bool`, `optional`, defaults to :obj:`True`):
             Whether or not to use masked language modeling. If set to :obj:`False`, the labels are the same as the
             inputs with the padding tokens ignored (by setting them to -100). Otherwise, the labels are -100 for
@@ -149,9 +152,8 @@ class DataCollatorForLanguageModeling:
         
         if isinstance(examples[0], (dict, BatchEncoding)):
             batch = self.tokenizer.pad(examples, return_tensors="pt")
-            # raise NotImplementedError("BatchEncoding suppoert not implemented yet")
         else:
-            batch = {"input_ids": _collate_batch(examples, self.tokenizer.pad_token_id)}
+            batch = {"input_ids": _collate_batch(examples, self.tokenizer)}
 
         # If special token mask has been preprocessed, pop it from the dict.
         special_tokens_mask = batch.pop("special_tokens_mask", None)
