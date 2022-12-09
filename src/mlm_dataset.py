@@ -1,5 +1,6 @@
 from tqdm import tqdm
 import numpy as np
+from transformers import set_seed
 import os
 from torch.utils.data import Dataset
 from dataclasses import dataclass
@@ -13,37 +14,47 @@ logging.basicConfig(level=logging.INFO)
 
 
 class LineByLineTextDataset(Dataset):
-    """
-    This will be superseded by a framework-agnostic approach soon.
-    """
-    def __init__(self, tokenizer, file_paths, block_size, truncate_at, name="", randomize=True, rand_seed=10, is_eval=False):
+    def __init__(self, lang_to_tokenizer, lang_paths, block_size, truncate_at=-1, name="", randomize=True, rand_seed=10, is_eval=False, lang_to_offset=None):
         rng.seed(rand_seed)
+        logging.info(f"seed: {rand_seed}")
+        lang_ids = []
         input_ids = []
-        portion = truncate_at//len(file_paths) if truncate_at!=-1 else -1
-        for file_path in file_paths:
+
+        portion = truncate_at//len(lang_paths) if truncate_at!=-1 else -1
+        for lang, file_path in lang_paths:
+            new_lines=[]
             logging.info(file_path)
             assert os.path.isfile(file_path), "Input file path {} not found".format(file_path)
-            # Here, we do not cache the features, operating under the assumption
-            # that we will soon use fast multithreaded tokenizer from the
-            # `tokenizer` repo everywhere =)
-
             with open(file_path, encoding="utf-8") as f:
-                new_lines = [line for line in tqdm(f.readlines(), desc=f"reading lines {name}, is random: {randomize}") if (len(line) > 0 and not line.isspace())]
-                if portion>=0 and is_eval:
-                    new_lines = new_lines[:min(portion,len(new_lines))]
-                    
-            # TODO: problem with fitting the sentences of full length, that's why max_len is reduced by 2
-            input_ids += tokenizer(new_lines, add_special_tokens=True, truncation=True, max_length=block_size-2)['input_ids']
+                new_lang_lines = [line for line in tqdm(f.readlines(), desc=f"reading lines {name}, is random: {randomize}") if (len(line) > 0 and not line.isspace())]
+                new_lines+=new_lang_lines
+            if portion>=0 and is_eval:
+                new_lines = new_lines[:min(portion,len(new_lines))]
 
+            new_input_ids = lang_to_tokenizer[lang](new_lines, add_special_tokens=True, truncation=True, max_length=block_size-2)['input_ids']
+            new_input_ids = [[tok_id + lang_to_offset.get(lang, 0) if tok_id > 4 else tok_id for tok_id in ii] for ii in new_input_ids]
+            input_ids += new_input_ids
+
+            lang_ids += [lang]*len(new_lines)
+
+
+        assert len(input_ids) == len(lang_ids)
+
+        lang_ids = np.array(lang_ids)
         input_ids = np.array(input_ids)
+
         indices = np.arange(len(input_ids))
         if randomize:
             rng.shuffle(indices)
+
         if truncate_at >= 1:
             indices=indices[:truncate_at]
 
-        self.examples = input_ids[indices].tolist()
-        self.examples = [{"input_ids": torch.tensor(self.examples[i], dtype=torch.long)} for i in tqdm(range(len(indices)), desc=f"extracting tokenized lines {name}...")]
+        input_ids = input_ids[indices].tolist()
+        lang_ids = lang_ids[indices].tolist()
+        
+        self.examples = input_ids
+        self.examples = [{"input_ids": torch.tensor(self.examples[i], dtype=torch.long), "language_ids":lang_ids[i]} for i in tqdm(range(len(indices)), desc=f"extracting tokenized lines {name}, order:{indices[:10]}... with ids")]
 
     def __len__(self):
         return len(self.examples)
@@ -110,12 +121,19 @@ class DataCollatorForLanguageModeling:
         argument :obj:`return_special_tokens_mask=True`.
     """
 
+    #lang_to_tokenizer: dict[PreTrainedTokenizerBase]
+    # TODO: think how to make special tokens language dependent
     tokenizer: PreTrainedTokenizerBase
+    # tokenizer.mask_token_id: int
+    # tokenizer.pad_token_id: int
+    # tokenizer.cls_token_id: int
+    # tokenizer.sep_token_id: int
+    vocab_size: int
     mlm: bool = True
     mlm_probability: float = 0.15
 
     def __post_init__(self):
-        if self.mlm and self.tokenizer.mask_token is None:
+        if self.mlm and self.tokenizer.mask_token_id is None:
             raise ValueError(
                 "This tokenizer does not have a mask token which is necessary for masked language modeling. "
                 "You should pass `mlm=False` to train on causal language modeling instead."
@@ -125,6 +143,8 @@ class DataCollatorForLanguageModeling:
             self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.Tensor]]]
     ) -> Dict[str, torch.Tensor]:
         # Handle dict or lists with proper padding and conversion to tensor.
+        # TODO: think how to handle padding when the tokenizers differ for different languages ?
+        
         if isinstance(examples[0], (dict, BatchEncoding)):
             batch = self.tokenizer.pad(examples, return_tensors="pt")
         else:
@@ -166,13 +186,15 @@ class DataCollatorForLanguageModeling:
 
         # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
         indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
-        inputs[indices_replaced] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
+        inputs[indices_replaced] = self.tokenizer.mask_token_id
 
         # 10% of the time, we replace masked input tokens with random word
         indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
-        random_words = torch.randint(len(self.tokenizer), labels.shape, dtype=torch.long)
+        random_words = 5 + torch.randint(self.vocab_size - 5, labels.shape, dtype=torch.long)
         inputs[indices_random] = random_words[indices_random]
 
         # The rest of the time (10% of the time) we keep the masked input tokens unchanged
         return inputs, labels
+    
+    # TODO: Mapping input tokens function based on language indices
 

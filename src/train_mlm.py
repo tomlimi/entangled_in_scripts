@@ -25,14 +25,35 @@ def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkp
 
     logging.info("Loading tokenizer..")
     # get tokenizer:
-    tokenizer = XLMRobertaTokenizerFast.from_pretrained(model_config['tokenizer_path'], max_len=model_config['max_sent_len'])
+    if 'tokenizer_lang' in model_config:
+        assert type(model_config['tokenizer_path']) == list
+        tokenizers = [XLMRobertaTokenizerFast.from_pretrained(tp, max_len=model_config['max_sent_len']) for tp in model_config['tokenizer_path']]
+        tokenizer = tokenizers[0]
+        languages = model_config['tokenizer_lang']
+        lang_to_tokenizers = {lang:tokenizer for lang, tokenizer in zip(languages, tokenizers)}
+        
+        # Only tokenizers with the same vocab size are supported now.
+        lang_to_offset= {lang: len(tokenizer) * i for i, lang in enumerate(languages)}
+        vocab_size = model_config['vocab_size'] * len(tokenizers)
+
+        train_lang_paths = list(zip(pt_config['train_lang_list'], pt_config['train_data_paths_list']))
+        eval_lang_paths = list(zip(pt_config['eval_lang_list'], pt_config['eval_data_paths_list']))
+    else:
+        tokenizer = XLMRobertaTokenizerFast.from_pretrained(model_config['tokenizer_path'], max_len=model_config['max_sent_len'])
+        lang_to_tokenizers = {'multilingual': tokenizer}
+        lang_to_offset = {}
+        vocab_size = model_config['vocab_size']
+
+        train_lang_paths = [('multilingual', train_path) for train_path in pt_config['train_data_paths_list']]
+        eval_lang_paths = [('multilingual', train_path) for train_path in pt_config['eval_data_paths_list']]
+
     MASK_ID = tokenizer.mask_token_id
     logging.info(MASK_ID)
     # build dataset:
     logging.info("Building Model..")
     
     config = XLMRobertaConfig(
-        vocab_size=model_config['vocab_size'],
+        vocab_size=vocab_size,
         hidden_size=model_config['hidden_layer_size'],
         num_hidden_layers=model_config['num_hidden'],
         num_attention_heads=model_config['num_attention'],
@@ -42,7 +63,8 @@ def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkp
     # define a data_collator (a small helper that will help us batch different samples of the dataset together into an
     # object that PyTorch knows how to perform backprop on):
     data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer, mlm=True, mlm_probability=0.15
+        tokenizer=tokenizer, vocab_size=vocab_size,
+        mlm=True, mlm_probability=0.15
     )
     # init trainer:
     logging.info("Training\Loading model...")
@@ -55,8 +77,9 @@ def pretrain(pretrain_outpath, model_config, pt_config, truncate_at, load_checkp
 
         truncate_eval = 1000 if truncate_at == -1 else min(truncate_at,1000)
         
-        pretrain_dataset = LineByLineTextDataset(tokenizer=tokenizer, file_paths= pt_config['train_data_paths_list'], block_size=model_config['max_sent_len'], truncate_at=truncate_at, name="pretrain train", rand_seed=data_seed)
-        preeval_dataset = LineByLineTextDataset(tokenizer=tokenizer, file_paths=pt_config['eval_data_paths_list'], block_size=model_config['max_sent_len'], truncate_at=truncate_eval, name="pretrain eval", rand_seed=data_seed, is_eval=True)
+        pretrain_dataset = LineByLineTextDataset(lang_to_tokenizer=lang_to_tokenizers, lang_paths=train_lang_paths, block_size=model_config['max_sent_len'], truncate_at=truncate_at, name="pretrain train", rand_seed=data_seed, lang_to_offset=lang_to_offset, is_eval=False)
+        preeval_dataset = LineByLineTextDataset(lang_to_tokenizer=lang_to_tokenizers, lang_paths=eval_lang_paths, block_size=model_config['max_sent_len'], truncate_at=truncate_eval, name="pretrain eval", rand_seed=data_seed, lang_to_offset=lang_to_offset, is_eval=True)
+
         logging.info("Pretraining model..")
         os.makedirs(pretrain_outpath, exist_ok=True)
         training_args = TrainingArguments(
@@ -137,7 +160,7 @@ def train(args):
     seed = args.seed
     logging.info('Training mulitling')
 
-    pretrain_outpath = os.path.join(out_path, pretrain_name+'_'+str(seed))
+    pretrain_outpath = os.path.join(out_path, pretrain_name+'_'+str(data_seed))
     logging.info(f"Common pretrain path: {pretrain_outpath}")
 
     model_config = load_config(args.model_config_path)

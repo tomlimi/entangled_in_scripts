@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --mem=128g
+#SBATCH --mem=64g
 #SBATCH -N 1
 #SBATCH --cpus-per-task=2
 #SBATCH --time=6-23
@@ -35,7 +35,7 @@ echo $model_config
 echo $pt_config
 
 
-python train_mlm_nooverlap.py -o ${output_path} -p $pretrain_name  --model_config_path $model_config --pretrain_config_path $pt_config --load_checkpoint True --seed $seed --data_seed $seed --early_stopping_patience $es_patience
+python train_mlm.py -o ${output_path} -p $pretrain_name  --model_config_path $model_config --pretrain_config_path $pt_config --load_checkpoint True --seed $seed --data_seed $seed --early_stopping_patience $es_patience
 
 model_dir_path=${output_path}/${pretrain_name}_${seed}
 
@@ -44,7 +44,7 @@ echo "Evaluation"
 
 for lang in ${langs[@]}
 do
-  python eval_nooverlap.py -e "${data_path}/${lang}/test" -m $model_dir_path -c  $model_config -o ${output_path}/${pretrain_name}_${seed}/${lang} --language $lang
+  python eval.py -e "${data_path}/${lang}/test" -m $model_dir_path -c  $model_config -o ${output_path}/${pretrain_name}_${seed}/${lang} --language $lang
 done
 
 chmod -R 777 $output_path || exit 0;

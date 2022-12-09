@@ -74,7 +74,23 @@ def eval_single_model(args):
     base_name = 'mrr_eval_' if not is_zero_shot else 'mrr_eval_zero_shot'
     logging.info(f"Output is: {out_path} with base name: {base_name}")
     config =json.load(open(model_config_path,'r'))
-    tokenizer = XLMRobertaTokenizerFast.from_pretrained(config['tokenizer_path'])
+
+    language = args.language
+    
+    if 'tokenizer_lang' in config:
+        language_list = config['tokenizer_lang']
+        lang_index = language_list.index(language)
+        
+        tokenizer = XLMRobertaTokenizerFast.from_pretrained(config['tokenizer_path'][lang_index])
+        vocab_size=len(tokenizer) * len(language_list)
+        lang_to_offset = {language: len(tokenizer) * lang_index}
+    else:
+        tokenizer = XLMRobertaTokenizerFast.from_pretrained(config['tokenizer_path'])
+        vocab_size=len(tokenizer)
+        lang_to_offset = {}
+
+    eval_lang_paths = [(language, path) for path in eval_data_paths]
+    
     if truncate_at >= 1:
         if os.path.exists(os.path.join(out_path,f'{base_name+str(truncate_at)}.txt')) and not overwrite:
             logging.info(f"stats already exist at {os.path.join(out_path,f'{base_name+str(truncate_at)}.txt')}, no overwrite. returning. ")
@@ -88,12 +104,11 @@ def eval_single_model(args):
     model = AutoModelForMaskedLM.from_pretrained(model_dir_path)
 
     data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer, mlm=True, mlm_probability=0.15
+        tokenizer=tokenizer, vocab_size=vocab_size, mlm=True, mlm_probability=0.15
     )
-    if truncate_at >=1:
-        ft_eval = LineByLineTextDataset(tokenizer=tokenizer, file_paths=eval_data_paths, block_size=config['max_sent_len'], truncate_at=truncate_at, randomize=False)
-    else:
-        ft_eval = LineByLineTextDataset(tokenizer=tokenizer, file_paths=eval_data_paths, block_size=config['max_sent_len'], truncate_at=-1, randomize=False)
+    
+    ft_eval = LineByLineTextDataset({language: tokenizer}, lang_paths=eval_lang_paths, block_size=config['max_sent_len'], truncate_at=truncate_at, lang_to_offset=lang_to_offset, randomize=False)
+
     logging.info(f"Evaulating {model_dir_path} on {eval_data_paths} with truncate {truncate_at} and zeroshot {is_zero_shot}. Overrite:{overwrite}.")
     # gathering scores:
     batch_size = 16
@@ -122,6 +137,7 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--eval_data_paths', nargs='+', help='<Required> Set flag', required=True)
     parser.add_argument('-m', '--model_dir_path', type=str, help='<Required> Set flag', required=True)
     parser.add_argument('-c', '--model_config_path',type=str, required=True)
+    parser.add_argument('-l', '--language', type=str, required=True)
     parser.add_argument('-t', '--truncate_at',type=int, default=-1)
     parser.add_argument('--overwrite',type=bool, default=True)
     parser.add_argument('-z', '--is_zero_shot',type=bool, default=False)
