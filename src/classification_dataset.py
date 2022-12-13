@@ -6,17 +6,18 @@ class ClassificationDataset:
     TAG_FIELD = ""
     NUM_LABELS = 0
 
-    def __init__(self, language, tokenizer, truncate_at=-1, max_length=128):
+    def __init__(self, language, tokenizer, truncate_at=-1, max_length=128, lang_offset=0):
         self.tokenizer = tokenizer
         # TODO: hack with too large input length
         self.max_length = max_length - 2
-        self.truncate_at=truncate_at
+        self.truncate_at = truncate_at
+        self.lang_offset = lang_offset
         self.dataset = None
 
     def tokenize_and_align_labels(self, examples):
-
+    
         inputs = self.tokenizer.batch_encode_plus(examples["tokens"], truncation=True,
-                                                       is_split_into_words=True, max_length=self.max_length)
+                                                  is_split_into_words=True, max_length=self.max_length)
         labels = []
         for i, (label, sent) in enumerate(zip(examples[self.TAG_FIELD], examples["tokens"])):
             label_ids = [-100]
@@ -35,6 +36,11 @@ class ClassificationDataset:
             labels.append(label_ids)
 
         inputs["labels"] = labels
+        
+        # add offset if set for the language
+        if self.lang_offset > 0:
+            inputs['input_ids'] = [[tok_id + self.lang_offset if tok_id > 4 else tok_id for tok_id in ii]
+                                   for ii in inputs['input_ids']]
         return inputs
 
     @property
@@ -65,8 +71,8 @@ class XtremePOSClassificationDataset(ClassificationDataset):
                 'de': 'German', 'eu': 'Basque', 'tr': 'Turkish', 'vi': 'Vietnamese', 'hu': 'Hungarian',
                 'es': 'Spanish', 'en': 'English', 'ar': 'Arabic', 'zh': 'Chinese'}
 
-    def __init__(self, language, tokenizer, truncate_at= 1, max_length=128):
-        super().__init__(language, tokenizer, truncate_at, max_length)
+    def __init__(self, language, tokenizer, truncate_at= 1, max_length=128, lang_offset=0):
+        super().__init__(language, tokenizer, truncate_at, max_length, lang_offset=lang_offset)
         if language not in self._iso2lang:
             raise ValueError(f"Language {language} not supported by Xtreme POS. Pick one of: {list(self._iso2lang.keys())}")
 
@@ -80,8 +86,8 @@ class XtremeNERClassificationDataset(ClassificationDataset):
 
     _langs = {'ur', 'te', 'hi', 'el', 'ko', 'ru', 'de', 'eu', 'tr', 'vi', 'hu', 'es', 'en', 'ar', 'zh'}
 
-    def __init__(self, language, tokenizer, truncate_at= 1, max_length=128):
-        super().__init__(language, tokenizer, truncate_at, max_length)
+    def __init__(self, language, tokenizer, truncate_at= 1, max_length=128, lang_offset=0):
+        super().__init__(language, tokenizer, truncate_at, max_length, lang_offset=lang_offset)
         if language not in self._langs:
             raise ValueError(f"Language {language} not supported by Xtreme PANX. Pick one of: {list(self._langs)}")
 

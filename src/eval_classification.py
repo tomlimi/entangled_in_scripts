@@ -73,16 +73,24 @@ def eval(args):
         return
 
     logging.info(f"Loading tokenizer")
-    tokenizer = XLMRobertaTokenizerFast.from_pretrained(model_config['tokenizer_path'])
+    if 'tokenizer_lang' in model_config:
+        language_list = model_config['tokenizer_lang']
+        lang_index = language_list.index(tgt_lang)
+    
+        tokenizer = XLMRobertaTokenizerFast.from_pretrained(model_config['tokenizer_path'][lang_index], max_length=model_config['max_sent_len'])
+        lang_offset = len(tokenizer) * lang_index
+    else:
+        tokenizer = XLMRobertaTokenizerFast.from_pretrained(model_config['tokenizer_path'], max_length=model_config['max_sent_len'])
+        lang_offset = 0
 
     logging.info("Loading dataset...")
     data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
     if task == 'POS':
-        dataset = XtremePOSClassificationDataset(tgt_lang, tokenizer,
-                                                 truncate_at=truncate_at, max_length=model_config['max_sent_len'])
+        dataset = XtremePOSClassificationDataset(tgt_lang, tokenizer, truncate_at=truncate_at,
+                                                 max_length=model_config['max_sent_len'], lang_offset=lang_offset)
     elif task == 'NER':
-        dataset = XtremeNERClassificationDataset(tgt_lang, tokenizer,
-                                                 truncate_at=truncate_at, max_length=model_config['max_sent_len'])
+        dataset = XtremeNERClassificationDataset(tgt_lang, tokenizer, truncate_at=truncate_at,
+                                                 max_length=model_config['max_sent_len'], lang_offset=lang_offset)
     else:
         raise ValueError(f"Unaupported task: {task}. Only `POS` is currently supported.")
 
