@@ -28,18 +28,18 @@ def get_tokenizer(tokenizer_dir, tokenizer_type, lang, alpha, NV):
     )
 
 
-def save_token_frequency(tokens_with_freq, decoded_tokens_with_freq, out_path):
+def save_token_frequency(tokens_with_freq, decoded_tokens_with_freq, out_path, name):
     """Function to save token frequencies and log arguments to a file"""
 
     # copy current script to the output directory
-    shutil.copyfile(sys.argv[0], os.path.join(out_path, "frequency_script.py"))
+    shutil.copyfile(sys.argv[0], os.path.join(out_path, "{name}_script.py"))
     # save the arguments
-    with open(os.path.join(out_path, "frequency_args.txt"), "w") as log_file:
+    with open(os.path.join(out_path, "{name}_args.txt"), "w") as log_file:
         log_file.write(" ".join(sys.argv[1:]))
 
     for save_name, save_object in [
-        ("token_frequencies.json", tokens_with_freq),
-        ("decoded_token_frequencies.json", decoded_tokens_with_freq),
+        (f"{name}.json", tokens_with_freq),
+        (f"{name}_decoded.json", decoded_tokens_with_freq),
     ]:
         save_path = os.path.join(out_path, save_name)
         with open(save_path, "w", encoding="utf-8") as outfile:
@@ -100,7 +100,9 @@ def main(args):
         (id_to_token[token_id], freq) for token_id, freq in tokens_with_freq
     ]
 
-    save_token_frequency(tokens_with_freq, decoded_tokens_with_freq, tokenizer_path)
+    save_token_frequency(
+        tokens_with_freq, decoded_tokens_with_freq, tokenizer_path, args.name
+    )
 
 
 if __name__ == "__main__":
@@ -121,6 +123,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("-v", "--vocab_size", type=int, required=True)
     parser.add_argument("-t", "--type", type=str, required=False, default="unigram")
+    parser.add_argument(
+        "-n", "--name", type=str, required=False, default="token_frequencies"
+    )
     parser.add_argument("-c", "--cased", action="store_true", default=False)
     args = parser.parse_args()
     main(args)
