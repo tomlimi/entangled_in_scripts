@@ -37,7 +37,7 @@ def compute_mrr(model, ft_eval, data_collator, vocab_size, batch_size):
     mrrs = []
     rank_accs = []
     num_of_masked = []
-    for idx in tqdm(range(0,len(ft_eval), batch_size), desc='getting eval results...'):
+    for idx in tqdm(range(0,len(ft_eval), batch_size), desc='getting mrr eval results...'):
         data_dict = data_collator([ft_eval[i]['input_ids'] for i in range(min(batch_size, len(ft_eval)-idx))]) #dict: {'input_ids':<tokens>, 'labels':<-100 should be ignored>}
         inputs, labels = data_collator.mask_tokens(data_dict['input_ids'])
         logits = model(inputs).logits
@@ -54,6 +54,21 @@ def compute_mrr(model, ft_eval, data_collator, vocab_size, batch_size):
         rank_accs.append(np.sum(1-(correct_word_indices/vocab_size))/len(correct_word_indices))
 
     return mrrs, rank_accs, num_of_masked
+
+
+def compute_bpc(model, tokenizer, ft_eval, data_collator, batch_size, lang_offset=0):
+    bpcs = []
+    # compute weights depending on token length in characters.
+    
+    weight_classes_by_charcters = torch.tensor((*map(len,sorted(tokenizer.vocab, key=tokenizer.vocab.get)),), dtype=torch.float32)
+    loss_fct = torch.nn.CrossEntropyLoss(weight=weight_classes_by_charcters, ignore_index=-100 - lang_offset)
+    for idx in tqdm(range(0,len(ft_eval), batch_size), desc='getting bpc results...'):
+        data_dict = data_collator([ft_eval[i]['input_ids'] for i in range(min(batch_size, len(ft_eval)-idx))]) #dict: {'input_ids':<tokens>, 'labels':<-100 should be ignored>}
+        inputs, labels = data_dict['input_ids'], data_dict['labels']
+        logits = model(inputs).logits[:,:,lang_offset:lang_offset+tokenizer.vocab_size]
+        loss = loss_fct(logits.view(-1, logits.shape[-1]), labels.view(-1) - lang_offset)
+        bpcs.append(loss.item())
+    return bpcs
 
 
 def eval_single_model(args):
@@ -128,9 +143,17 @@ def eval_single_model(args):
         json.dump({'eval_mrr':mrr, 'all_batches_mrrs':mrrs, 'num_of_masked_per_batch':num_of_masked}, eval_mrr_out)
     with open(os.path.join(out_path,f'rank_acc_eval_{base_name+str(truncate_at)}.txt'), 'w') as eval_rank_acc_out:
         json.dump({'eval_rank_acc':rank_acc, 'all_batches_rank_acc':rank_accs}, eval_rank_acc_out)
+
+    bpcs = compute_bpc(model, tokenizer, ft_eval, data_collator, batch_size, lang_offset=lang_to_offset.get(language, 0))
+
+    bpc = np.sum(np.array(bpcs) * np.array(num_of_masked)) / sum(num_of_masked)
+    logging.info(f"Model bpc: {bpc}")
+    
+    with open(os.path.join(out_path,f'bpc_eval_{base_name+str(truncate_at)}.txt'), 'w') as eval_bpc_out:
+        json.dump({'eval_bpc':bpc, 'all_batches_bpcs':bpcs}, eval_bpc_out)
+        
     with open(os.path.join(out_path,f'script_args_{base_name+str(truncate_at)}.txt'), 'w') as script_args:
         json.dump({'args':str(vars(args)),'note':'overwrite is manually always True.'}, script_args)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
