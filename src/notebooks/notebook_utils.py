@@ -1,4 +1,6 @@
 import os
+import numpy as np
+from collections import defaultdict
 import json
 import csv
 from transformers import XLMRobertaTokenizerFast
@@ -10,7 +12,7 @@ def get_tokenizer_path(tokenizer_dir, tokenizer_type, lang, alpha, NV):
     return os.path.join(tokenizer_dir, tokenizer_type, lang, f"alpha-{alpha}_N-{NV}")
 
 
-# getting tokenizer
+# getting tokenizer / vocabularies
 def get_tokenizer(tokenizer_dir, tokenizer_type, lang, alpha, NV):
     tokenizer_path = get_tokenizer_path(tokenizer_dir, tokenizer_type, lang, alpha, NV)
     return XLMRobertaTokenizerFast.from_pretrained(tokenizer_path, unk_token="<unk>")
@@ -126,6 +128,32 @@ def stats_to_pandas(token_stats):
     return df
 
 
+def get_word_logits(tokenizer_dir, tokenizer_type, lang, alpha, NV):
+    """
+    Returns word logits from tokenizer.json.
+    """
+    tokenizer_path = os.path.join(tokenizer_dir, tokenizer_type, lang, f"alpha-{alpha}_N-{NV}", "tokenizer.json")
+    with open(tokenizer_path, 'r') as tokenizer_json:
+        tokenizer_dict = json.load(tokenizer_json)
+    return {word_logit[0]: word_logit[1] for word_logit in tokenizer_dict['model']['vocab']}
+
+
+def substitute_word_logits(tokenizer_dir, tokenizer_type, lang, alpha, NV, word_logits, suffix='merged'):
+    """
+    Substitutes word logits in tokenizer.json with the ones provided.
+    """
+    tokenizer_in_path = os.path.join(tokenizer_dir, tokenizer_type, lang, f"alpha-{alpha}_N-{NV}", "tokenizer.json")
+    with open(tokenizer_in_path, 'r') as tokenizer_json:
+        tokenizer_dict = json.load(tokenizer_json)
+
+    tokenizer_dict['model']['vocab'] = [[t, v] for t, v in word_logits.items()]
+    
+    tokenizer_out_path = os.path.join(tokenizer_dir, f"{tokenizer_type}-{suffix}", lang, f"alpha-{alpha}_N-{NV}", "tokenizer.json")
+    os.makedirs(os.path.dirname(tokenizer_out_path), exist_ok=True)
+    with open(tokenizer_out_path, 'w', encoding='utf-8' ) as tokenizer_json:
+        json.dump(tokenizer_dict, tokenizer_json, indent=2, ensure_ascii=False)
+
+
 # alphabet analysis
 def get_alphabet_size(tokenizer):
     return len([t for t in tokenizer.get_vocab().keys() if len(t) == 1])
@@ -223,3 +251,19 @@ def print_tokens_overlap(mono_tokenizer_list, multi_tokenizer):
     print(sorted_tokens)
     print(f"Number of overlapping tokens: {len(sorted_tokens)}")
     print("\n")
+
+
+def merge_vocabularies_with_logits(token_logit_list, NV):
+    merged_logits = defaultdict(float)
+    for tl in token_logit_list:
+        for token, logit in tl.items():
+            merged_logits[token] += np.exp(logit)
+
+    merged_vocabulary = dict(sorted(merged_logits.items(), key=lambda item: -item[1])[:NV])
+    
+    norm_sum = sum([v for t, v in merged_vocabulary.items() if t not in('<s>', '<pad>', '</s>',  '<unk>', '<mask>')])
+    merged_vocabulary = {t: np.log(v/norm_sum) if t not in('<s>', '<pad>', '</s>',  '<unk>', '<mask>') else 0.0
+                         for t, v in merged_vocabulary.items()}
+    return merged_vocabulary
+
+
