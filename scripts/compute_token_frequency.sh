@@ -2,44 +2,35 @@
 #SBATCH --mem=128g
 #SBATCH -c4
 #SBATCH --time=3-0
-#SBATCH --mail-type=FAIL,TIME_LIMIT
-#SBATCH --mail-user=limisiewicz@ufal.mff.cuni.cz
+#SBATCH --mail-type=END,FAIL,TIME_LIMIT
+#SBATCH --mail-user=balhar.j@gmail.com
 #SBATCH --output=/home/limisiewicz/my-luster/entangled-in-scripts/job_outputs/compute_frequency_%j.out
 
-
+# arguments for loading the correct tokenizer
 vocab_size=$1
-alpha_id=$2
+alpha=$2
 type=$3
-langs=${@:4:1000}
+tokenizer_lang=$4
+experiment_name=$5
+# arguments for loading the data
+data_args=${@:6:1000}
 
-alphas=("0.0" "0.25" "0.5" "0.75" "1.0")
-
-cd /home/limisiewicz/my-luster/entangled-in-scripts/entangled_in_scripts/src || exit 1;
+cd /home/$USER/my-luster/entangled-in-scripts/entangled_in_scripts/src || exit 1;
 source /home/limisiewicz/my-luster/entangled-in-scripts/eis/bin/activate
 
-data_file="/lnet/express/work/people/limisiewicz/cc100"
 output_path="/lnet/work/people/limisiewicz/entangled-in-scripts/tokenizers"
 
-files=""
-
-for lang in ${langs[@]}
-do
-  for alpha in ${alphas[@]:0:$alpha_id+1}
-  do
-    files+="${data_file}/${lang}/alpha${alpha} "
-  done
-done
-
-alpha=${alphas[@]:$alpha_id:1}
-
-echo "Tokenizer training files: ${files}"
+echo "Data arguments: ${data_args}"
 echo "Type: ${type}"
 echo "Alpha: ${alpha}"
 echo "Vocab size: ${vocab_size}"
 echo "Langs: ${langs[@]}"
+echo "Cased: yes"
+echo "Name: $experiment_name"
 
-python compute_token_frequency.py -d ${files} -o ${output_path} -a $alpha -l ${langs[@]} -v $vocab_size -t $type -c
+# python compute_token_frequency.py -o ${output_path} -a $alpha -l ${langs[@]} -v $vocab_size -t $type -c
+# identifikace tokenizeru: tokenizer_dir, tokenizer_type, lang, alpha, NV
+python compute_token_frequency.py -o ${output_path} -t $type -l $tokenizer_lang -a $alpha -v $vocab_size -n $experiment_name -c ${data_args}
 
 # Run:
-# sh compute_token_frequency.sh 120000 0 sp-unigram ar tr zh el es en
-
+# sbatch compute_token_frequency.sh 120000 $alpha sp-unigram ar-tr-zh-el-es-en "token_freq_$lang_$alpha" -d $(./pretraining_data_paths.sh $alpha $lang)
