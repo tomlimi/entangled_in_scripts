@@ -15,16 +15,17 @@ train_alpha=$2
 vocab_size=$3
 lang_src=$4
 lang_tgt=$5
-seed=$6
+tok_type=$6
+seed=$7
 
 
-model_config="/home/limisiewicz/my-luster/entangled-in-scripts/models/config/multilingual-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
+model_config="/home/limisiewicz/my-luster/entangled-in-scripts/models/config/${tok_type}-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
 name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
 
 #name="${name}_probe"
 
 
-output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/NER_FT/multilingual-tokenization/"
+output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/NER_PROBE/${tok_type}-tokenization/"
 #name="${pt_type}_${vocab}_depth_${depth}"
 
 

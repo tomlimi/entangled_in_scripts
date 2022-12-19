@@ -14,15 +14,16 @@
 alpha=$1
 alpha_train=$2
 vocab_size=$3
-langs=${@:4:1000}
+tok_type=$4
+langs=${@:5:1000}
 es_patience=20
 
 cd /home/limisiewicz/my-luster/entangled-in-scripts/entangled_in_scripts/src || exit 1;
 source /home/limisiewicz/my-luster/entangled-in-scripts/eis/bin/activate
 
 
-output_path="/lnet/work/people/limisiewicz/entangled-in-scripts/models/LM/multilingual-tokenization"
-config_path="/lnet/work/people/limisiewicz/entangled-in-scripts/models/config/multilingual-tokenization"
+output_path="/lnet/work/people/limisiewicz/entangled-in-scripts/models/LM/${tok_type}-tokenization"
+config_path="/lnet/work/people/limisiewicz/entangled-in-scripts/models/config/${tok_type}-tokenization"
 data_path="/lnet/express/work/people/limisiewicz/cc100"
 
 seed=1234
@@ -44,7 +45,7 @@ echo "Evaluation"
 
 for lang in ${langs[@]}
 do
-  python eval.py -e "${data_path}/${lang}/test" -m $model_dir_path -c  $model_config -o ${output_path}/${pretrain_name}_${seed}/${lang}
+  python eval.py -e "${data_path}/${lang}/test" -m $model_dir_path -c  $model_config -o ${output_path}/${pretrain_name}_${seed}/${lang} --language $lang
 done
 
 chmod -R 777 $output_path || exit 0;
