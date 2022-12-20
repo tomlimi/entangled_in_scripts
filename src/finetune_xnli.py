@@ -19,6 +19,7 @@
 
 import logging
 import os
+import json
 import random
 import sys
 from dataclasses import dataclass, field
@@ -475,16 +476,25 @@ def main():
         metrics["predict_samples"] = min(max_predict_samples, len(predict_dataset))
 
         trainer.log_metrics("predict", metrics)
-        trainer.save_metrics("predict", metrics)
+        # trainer.save_metrics("predict", metrics)
 
-        predictions = np.argmax(predictions, axis=1)
-        output_predict_file = os.path.join(training_args.output_dir, "predictions.txt")
-        if trainer.is_world_process_zero():
-            with open(output_predict_file, "w") as writer:
-                writer.write("index\tprediction\n")
-                for index, item in enumerate(predictions):
-                    item = label_list[item]
-                    writer.write(f"{index}\t{item}\n")
+        # TODO: move metric_name to arguments
+        metric_name = "accuracy"
+        out_path = os.path.join(
+            training_args.output_dir, metric_name + "_evaluation", model_args.language
+        )
+        stats = os.path.join(out_path, f"{metric_name}_all.txt")
+        if os.path.exists(stats):
+            logging.warning(
+                f"Stats already exist at {os.path.join(out_path,f'{metric_name}_all.txt')}."
+            )
+
+        # saving the stats:
+        result = metrics[f"predict_{metric_name}"]
+
+        os.makedirs(out_path, exist_ok=True)
+        with open(os.path.join(out_path, f"{metric_name}_all.txt"), "w") as eval_out:
+            json.dump({f"eval_{metric_name}": result}, eval_out)
 
 
 if __name__ == "__main__":
