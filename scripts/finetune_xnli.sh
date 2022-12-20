@@ -10,7 +10,7 @@
 #SBATCH --output=/home/balhar/my-luster/entangled-in-scripts/job_outputs/xnli/finetune_%j.out
 
 cd /home/$USER/my-luster/entangled-in-scripts/entangled_in_scripts || exit 1;
-source /home/limisiewicz/my-luster/entangled-in-scripts/eis/bin/activate
+source /home/$USER/my-luster/entangled-in-scripts/eis/bin/activate
 
 alpha=$1
 train_alpha=$2
@@ -18,27 +18,43 @@ vocab_size=$3
 lang=$4
 seed=$5
 
+in_seed=1234
 
 input_path="/home/$USER/my-luster/entangled-in-scripts/models/LM/multilingual-tokenization"
-model_config="/home/$USER/my-luster/entangled-in-scripts/models/config/multilingual-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
 name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
+model_path="$input_path/${name}_${in_seed}"
+
+
+# extract tokenizer path from the model_config json file
+model_config="/home/$USER/my-luster/entangled-in-scripts/models/config/multilingual-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
+tokenizer_path=$(python -c "import json; print(json.load(open('$model_config'))['tokenizer_path'])")
 
 output_path="/home/$USER/my-luster/entangled-in-scripts/models/XNLI_FT/multilingual-tokenization/"
+ft_output_path="$output_path/${name}_$seed/$lang"
+
+eval_and_save_steps=100
 
 echo start...
-echo NER
+echo XNLI
 echo ${input_path}
 echo ${output_path}
 echo ${model_config}
+echo ${tokenizer_path}
 echo ${name}
 
-#use --killable --requeue !!!
-# python src/finetune_classification.py -o ${output_path} -i ${input_path} -p ${name} -l ${lang} --model_config_path ${model_config} --load_checkpoint True --seed ${seed} --ft_task NER --probe False
+# disable cuda
+# export CUDA_VISIBLE_DEVICES=""
+# python -m pdb src/finetune_xnli.py \
 
-# not implemented yet:
 python src/finetune_xnli.py \
-    --model_name_or_path ${input_path} --output_dir ${output_path} --config_name ${model_config} --seed ${seed} --load_checkpoint True --train_alpha ${train_alpha} --alpha ${alpha} --vocab_size ${vocab_size} --lang ${lang} --name ${name}
+    --model_name_or_path ${model_path} --tokenizer_name ${tokenizer_path} --output_dir ${ft_output_path} --seed ${seed} --train_language ${lang} --language ${lang} \
+    --max_seq_length 126 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --save_steps $eval_and_save_steps --eval_steps $eval_and_save_steps \
+    --save_total_limit 5 --learning_rate 2e-5 --weight_decay 0.01 --evaluation_strategy steps --do_train --do_eval
+
 
 chmod -R 770 $output_path || exit 0;
 
 echo end
+
+# Example:
+# bash finetune_xnli.sh 0.25 0.25 120000 en 333
