@@ -15,12 +15,13 @@ source /home/$USER/my-luster/entangled-in-scripts/eis/bin/activate
 alpha=$1
 train_alpha=$2
 vocab_size=$3
-lang=$4
-seed=$5
+lang_src=$4
+lang_tgt=$5
+seed=$6
 
 input_path="/home/$USER/my-luster/entangled-in-scripts/models/XNLI_FT/multilingual-tokenization/"
 name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
-model_path="$input_path/${name}_${seed}/$lang"
+model_path="$input_path/${name}_${seed}/$lang_src"
 
 # extract tokenizer path from the model_config json file
 model_config="/home/$USER/my-luster/entangled-in-scripts/models/config/multilingual-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
@@ -43,7 +44,7 @@ echo ${name}
 # python -m pdb src/finetune_xnli.py \
 
 python src/finetune_xnli.py \
-    --model_name_or_path ${model_path} --tokenizer_name ${tokenizer_path} --output_dir ${output_path} --language ${lang} \
+    --model_name_or_path ${model_path} --tokenizer_name ${tokenizer_path} --output_dir ${output_path} --language ${lang_tgt} \
     --max_seq_length 126 --per_device_eval_batch_size 16 --do_predict
 
 
