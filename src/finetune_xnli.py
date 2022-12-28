@@ -144,6 +144,12 @@ class ModelArguments:
             "help": "Train language if it is different from the evaluation language."
         },
     )
+    probe: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Train a simple probe on top of the language model with the base model weights frozen."
+        },
+    )
     config_name: Optional[str] = field(
         default=None,
         metadata={
@@ -331,6 +337,10 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
         ignore_mismatched_sizes=model_args.ignore_mismatched_sizes,
     )
+    if model_args.probe:
+        logging.info("Probing scenario: freezing the base model.")
+        for param in model.base_model.parameters():
+            param.requires_grad = False
 
     # Preprocessing the datasets
     # Padding strategy
@@ -485,9 +495,7 @@ def main():
         )
         stats = os.path.join(out_path, f"{metric_name}_all.txt")
         if os.path.exists(stats):
-            logging.warning(
-                f"Stats already exist at {os.path.join(out_path,f'{metric_name}_all.txt')}."
-            )
+            logging.warning(f"Stats already exist at {stats}.")
 
         # saving the stats:
         result = metrics[f"predict_{metric_name}"]
