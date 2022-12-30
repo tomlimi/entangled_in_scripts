@@ -1,7 +1,8 @@
 #!/bin/bash
-#SBATCH --mem=8g
+#SBATCH --mem=32g
 #SBATCH -N 1
 #SBATCH --cpus-per-task=2
+#SBATCH --constraint="gpuram24G|gpuram40G|gpuram48G"
 #SBATCH --time=59:00
 #SBATCH --gres=gpu:1
 #SBATCH -p gpu-troja,gpu-ms
@@ -18,6 +19,7 @@ vocab_size=$3
 lang=$4
 tok_type=$5
 seed=$6
+probe=$7
 
 
 input_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/LM/${tok_type}-tokenization"
@@ -26,8 +28,12 @@ name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
 
 #name="${name}_probe"
 
+if [ "$probe" = 1 ]; then
+    output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/NER_PROBE/${tok_type}-tokenization/"
+else
+    output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/NER_FT/${tok_type}-tokenization/"
+fi
 
-output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/NER_PROBE/${tok_type}-tokenization/"
 
 
 
@@ -39,8 +45,11 @@ echo ${model_config}
 echo ${name}
 
 #use --killable --requeue !!!
-python src/finetune_classification.py -o ${output_path} -i ${input_path} -p ${name} -l ${lang} --model_config_path ${model_config} --load_checkpoint True --seed ${seed} --ft_task NER --probe True
-
+if [ "$probe" = 1 ]; then
+    python src/finetune_classification.py -i ${input_path} -o ${output_path} -p ${name} -l ${lang} --model_config_path ${model_config} --seed ${seed} --ft_task NER --probe True
+else
+    python src/finetune_classification.py -i ${input_path} -o ${output_path} -p ${name} -l ${lang} --model_config_path ${model_config} --seed ${seed} --ft_task NER --probe False
+fi
 chmod -R 770 $output_path || exit 0;
 
 echo end

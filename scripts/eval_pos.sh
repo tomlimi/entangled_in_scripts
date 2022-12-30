@@ -1,7 +1,8 @@
 #!/bin/bash
-#SBATCH --mem=8g
+#SBATCH --mem=32g
 #SBATCH -N 1
 #SBATCH --cpus-per-task=2
+#SBATCH --constraint="gpuram24G|gpuram40G|gpuram48G"
 #SBATCH --time=59:00
 #SBATCH --gres=gpu:1
 #SBATCH -p gpu-troja,gpu-ms
@@ -17,6 +18,7 @@ lang_src=$4
 lang_tgt=$5
 tok_type=$6
 seed=$7
+probe=$8
 
 
 model_config="/home/limisiewicz/my-luster/entangled-in-scripts/models/config/${tok_type}-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
@@ -24,13 +26,17 @@ name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
 
 #name="${name}_probe"
 
+if [ "$probe" = 1 ]; then
+    output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/POS_PROBE/${tok_type}-tokenization/"
+else
+    output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/POS_FT/${tok_type}-tokenization/"
+fi
 
-output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/POS_PROBE/${tok_type}-tokenization/"
 #name="${pt_type}_${vocab}_depth_${depth}"
 
 
 echo start...
-echo NER
+echo POS
 echo ${output_path}
 echo ${model_config}
 echo ${lang_src}_${lang_tgt}
