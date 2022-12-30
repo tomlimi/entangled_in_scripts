@@ -39,6 +39,21 @@ def evaluate_metric(dataset, model, data_collator, metric_name, task='POS'):
             true_labels = [[ner_mapping[l] for l in true_labels]]
         eval_metric.add_batch(predictions=true_predictions, references=true_labels)
 
+
+    # batch_size = 100
+    # dataset_batches = [dataset.select(range(i,min(i+batch_size, len(dataset)))) for i in range(0, len(dataset),batch_size)]
+    #
+    # for batch in dataset_batches:
+    #     predictions, labels, _ = eval_trainer.predict(batch)
+    #     predictions = np.argmax(predictions, axis=2)
+    #     for prediction, label in zip(predictions, labels):
+    #         true_predictions = [p for (p, l) in zip(prediction, label) if l != -100]
+    #         true_labels = [l for (p, l) in zip(prediction, label) if l != -100]
+    #         if task == 'NER' and metric_name == 'f1':
+    #             true_predictions = [[ner_mapping[p] for p in true_predictions]]
+    #             true_labels = [[ner_mapping[l] for l in true_labels]]
+    #         eval_metric.add_batch(predictions=true_predictions, references=true_labels)
+    
     if metric_name == 'f1':
         eval_results = eval_metric.compute()
         return eval_results['overall_f1']

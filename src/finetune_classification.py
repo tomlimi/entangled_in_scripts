@@ -61,12 +61,14 @@ def load_and_finetune(pretrain_in_path, ft_out_path, model_config, truncate_at, 
     logging.info("Loading pretrain data..")
 
     os.makedirs(ft_out_path, exist_ok=True)
+    gradient_accumulation_steps = 4
     training_args = TrainingArguments(
         output_dir=ft_out_path,
         overwrite_output_dir=True,
         num_train_epochs=3,
-        per_device_train_batch_size=16,
-        per_device_eval_batch_size=16,
+        per_device_train_batch_size=16//gradient_accumulation_steps,
+        per_device_eval_batch_size=8,
+        gradient_accumulation_steps=gradient_accumulation_steps,
         save_steps=eval_and_save_steps,
         eval_steps=eval_and_save_steps,
         save_total_limit=5,

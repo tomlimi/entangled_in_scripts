@@ -67,10 +67,11 @@ class XtremePOSClassificationDataset(ClassificationDataset):
     TAG_FIELD = "pos_tags"
     NUM_LABELS = 17
 
-    _iso2lang = {'ur': 'Urdu', 'te': 'Telugu', 'hi': 'Hindi', 'el': 'Greek', 'ko': 'Korean', 'ru': 'Russian',
-                'de': 'German', 'eu': 'Basque', 'tr': 'Turkish', 'vi': 'Vietnamese', 'hu': 'Hungarian',
-                'es': 'Spanish', 'en': 'English', 'ar': 'Arabic', 'zh': 'Chinese'}
-
+    _iso2lang = {'ar': 'Arabic','tr': 'Turkish','zh': 'Chinese', 'el': 'Greek', 'es': 'Spanish', 'en': 'English',
+                 'sw': 'Swahili', 'hi': 'Hindi',  'mr': 'Marathi', 'ur': 'Urdu', 'ta': 'Tamil', 'te': 'Telugu',
+                 'th': 'Thai', 'ru': 'Russian', 'bg': 'Bulgarian','he': 'Hebrew', 'vi': 'Vietnamese',
+                 'fr': 'French', 'de': 'German', 'ko': 'Korean', 'eu': 'Basque', 'hu': 'Hungarian'}
+                
     def __init__(self, language, tokenizer, truncate_at= 1, max_length=128, lang_offset=0):
         super().__init__(language, tokenizer, truncate_at, max_length, lang_offset=lang_offset)
         if language not in self._iso2lang:
@@ -84,7 +85,8 @@ class XtremeNERClassificationDataset(ClassificationDataset):
     TAG_FIELD = "ner_tags"
     NUM_LABELS = 7
 
-    _langs = {'ur', 'te', 'hi', 'el', 'ko', 'ru', 'de', 'eu', 'tr', 'vi', 'hu', 'es', 'en', 'ar', 'zh'}
+    _langs = {'ar', 'tr', 'zh', 'el', 'es', 'en', 'sw', 'mr', 'hi', 'ur', 'ta', 'te', 'th', 'ru', 'bg', 'he', 'ka',
+              'vi', 'fr', 'de', 'ko', 'eu', 'hu'}
 
     def __init__(self, language, tokenizer, truncate_at= 1, max_length=128, lang_offset=0):
         super().__init__(language, tokenizer, truncate_at, max_length, lang_offset=lang_offset)
