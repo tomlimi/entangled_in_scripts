@@ -102,10 +102,10 @@ def eval(args):
     data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
     if task == 'POS':
         dataset = XtremePOSClassificationDataset(tgt_lang, tokenizer, truncate_at=truncate_at,
-                                                 max_length=model_config['max_sent_len'], lang_offset=lang_offset)
+                                                 max_length=model_config['max_sent_len'], lang_offset=lang_offset, evaluation=True)
     elif task == 'NER':
         dataset = XtremeNERClassificationDataset(tgt_lang, tokenizer, truncate_at=truncate_at,
-                                                 max_length=model_config['max_sent_len'], lang_offset=lang_offset)
+                                                 max_length=model_config['max_sent_len'], lang_offset=lang_offset, evaluation=True)
     else:
         raise ValueError(f"Unaupported task: {task}. Only `POS` is currently supported.")
 
