@@ -17,7 +17,7 @@ def evaluate_metric(dataset, model, data_collator, metric_name, task='POS'):
 
     ner_mapping = {0: 'O', 1: 'B-PER', 2: 'I-PER', 3: 'B-ORG', 4: 'I-ORG', 5: 'B-LOC', 6: 'I-LOC'}
 
-    if metric_name == 'f1':
+    if metric_name == 'f1-seqeval':
         eval_metric = load_metric('seqeval')
     elif metric_name == 'f1-macro':
         eval_metric = load_metric('f1')
@@ -34,7 +34,7 @@ def evaluate_metric(dataset, model, data_collator, metric_name, task='POS'):
     for prediction, label in zip(predictions, labels):
         true_predictions = [p for (p, l) in zip(prediction, label) if l != -100]
         true_labels = [l for (p, l) in zip(prediction, label) if l != -100]
-        if task == 'NER' and metric_name == 'f1':
+        if task == 'NER' and metric_name == 'f1-seqeval':
             true_predictions = [[ner_mapping[p] for p in true_predictions]]
             true_labels = [[ner_mapping[l] for l in true_labels]]
         eval_metric.add_batch(predictions=true_predictions, references=true_labels)
@@ -54,7 +54,7 @@ def evaluate_metric(dataset, model, data_collator, metric_name, task='POS'):
     #             true_labels = [[ner_mapping[l] for l in true_labels]]
     #         eval_metric.add_batch(predictions=true_predictions, references=true_labels)
     
-    if metric_name == 'f1':
+    if metric_name == 'f1-seqeval':
         eval_results = eval_metric.compute()
         return eval_results['overall_f1']
     elif metric_name == 'f1-macro':
