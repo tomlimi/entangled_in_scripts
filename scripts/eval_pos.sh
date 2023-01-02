@@ -43,6 +43,7 @@ echo ${lang_src}_${lang_tgt}
 
 #use --killable --requeue !!!
 python src/eval_classification.py -o ${output_path} -p ${name} -s ${lang_src} -t ${lang_tgt} --model_config_path ${model_config} --seed ${seed} --ft_task POS
+python src/eval_classification.py -o ${output_path} -p ${name} -s ${lang_src} -t ${lang_tgt} --model_config_path ${model_config} --seed ${seed} --ft_task POS --metric f1-macro
 
 chmod -R 770 $output_path || exit 0;
 

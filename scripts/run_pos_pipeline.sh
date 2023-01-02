@@ -9,9 +9,10 @@ vocab_size=$3
 tok_type=$4
 seed=$5
 probe=$6
-# langs=("ar" "el" "en" "es" "tr" "zh")
-langs=("ar" "el" "en" "es" "tr" "zh" "hi" "mr" "ur" "ta" "te" "th" "ru" "bg" "he" "vi" "fr" "de")
+langs=("ar" "el" "en" "es" "tr" "zh")
+# langs=("ar" "el" "en" "es" "tr" "zh" "hi" "mr" "ur" "ta" "te" "th" "ru" "bg" "he" "vi" "fr" "de")
 
+jids=''
 for src_lang in ${langs[@]}
 do
   #jid=$(sbatch --killable --requeue scripts/finetune_pos.sh $alpha $train_alpha $vocab_size $src_lang $seed)
@@ -23,12 +24,17 @@ do
   echo $train_alpha
   echo $src_lang
 
+  jids="${jids}:${jid##* }"
   for tgt_lang in ${langs[@]}
   do
     # sbatch --killable --requeue --dependency=afterany:${jid##* } scripts/eval_pos.sh $alpha $train_alpha $vocab_size $src_lang $tgt_lang $seed
     # sbatch scripts/eval_pos.sh $alpha $train_alpha $vocab_size $src_lang $tgt_lang $tok_type $seed
-    sbatch --dependency=afterany:${jid##* } scripts/eval_pos.sh $alpha $train_alpha $vocab_size $src_lang $tgt_lang $tok_type $seed $probe
+    jid_eval=$(sbatch --dependency=afterany:${jid##* } scripts/eval_pos.sh $alpha $train_alpha $vocab_size $src_lang $tgt_lang $tok_type $seed $probe)
+    jids="${jids}:${jid_eval##* }"
   done
 done
+
+echo $jids
+sbatch --dependency=afterany${jids} scripts/clean_ft_files.sh $alpha $train_alpha $vocab_size $tok_type POS $seed $probe
 
 # source run_pos_pipeline.sh 0.25 0.25 120000 1234
