@@ -7,6 +7,8 @@ from transformers import XLMRobertaTokenizerFast
 import logging
 import pandas as pd
 
+TOKENIZERS_DIR = "/home/limisiewicz/my-luster/entangled-in-scripts/tokenizers"
+MODELS_DIR = "/home/limisiewicz/my-luster/entangled-in-scripts/models"
 
 def get_tokenizer_path(tokenizer_dir, tokenizer_type, lang, alpha, NV):
     return os.path.join(tokenizer_dir, tokenizer_type, lang, f"alpha-{alpha}_N-{NV}")
@@ -266,4 +268,145 @@ def merge_vocabularies_with_logits(token_logit_list, NV):
                          for t, v in merged_vocabulary.items()}
     return merged_vocabulary
 
+
+def distribution_from_frequencies(stats, NV):
+    dist = np.zeros(NV)
+    assert len(stats) == NV
+    for token, freq in stats.items():
+        dist[int(token)] = freq
+    dist /= dist.sum()
+    return dist
+
+
+def get_distribution_over_vocabulary(tok_type, alpha, NV, languages):
+    """
+    tok_type: 'mono' or 'multi'
+    """
+    
+    tok_type_map = {'multilingual': 'sp-unigram',
+                    '20l-multilingual': 'sp-unigram',
+                    'merged': 'sp-unigram-merged',
+                    '20l-merged': 'sp-unigram-merged',
+                    'nooverlap': 'sp-unigram',
+                    'bpe': 'sp-bpe',
+                    '20l-bpe': 'sp-bpe',
+                    'bpe_nooverlap': 'sp-bpe'}
+    
+    frequencies_over_vocabulary = dict()
+    
+    # monolingual frequencies
+    for lang in languages:
+        if "nooverlap" in tok_type:
+            tokenizer_stats_path = os.path.join(TOKENIZERS_DIR, tok_type_map[tok_type], lang,
+                                                f"alpha-{alpha}_N-{NV//len(languages)}",
+                                                f"token_freq_{lang}_{alpha}.json")
+        else:
+            tokenizer_stats_path = os.path.join(TOKENIZERS_DIR, tok_type_map[tok_type], '-'.join(languages),
+                                                f"alpha-{alpha}_N-{NV}", f"token_freq_{lang}_{alpha}.json")
+        try:
+            frequencies_over_vocabulary[lang] = json.load(open(tokenizer_stats_path, 'r'))
+        except FileNotFoundError:
+            print(f"{lang} freq file not found ({tokenizer_stats_path}).")
+            continue
+
+    # multilingual frequency file
+    if "nooverlap" in tok_type:
+        frequencies_over_vocabulary_new = defaultdict(dict)
+        
+        for tok_idx in range(NV):
+            lang_idx = tok_idx // (NV//len(languages))
+            rel_tok_idx = str(tok_idx % (NV//len(languages)))
+            curr_lang = languages[lang_idx]
+            for lang in languages:
+                frequencies_over_vocabulary_new[lang][str(tok_idx)] = frequencies_over_vocabulary[curr_lang][rel_tok_idx] if lang == curr_lang else 0
+            frequencies_over_vocabulary_new['multilingual'][str(tok_idx)] = frequencies_over_vocabulary[curr_lang][rel_tok_idx]
+        frequencies_over_vocabulary = frequencies_over_vocabulary_new
+    else:
+        tokenizer_stats_path = os.path.join(TOKENIZERS_DIR, tok_type_map[tok_type], '-'.join(languages),
+                                            f"alpha-{alpha}_N-{NV}", f"token_frequencies.json")
+        try:
+            frequencies_over_vocabulary['multilingual'] = json.load(open(tokenizer_stats_path, 'r'))
+        except FileNotFoundError:
+            print(f"Multilingual freq file not found ({tokenizer_stats_path}).")
+        
+    distribution_over_vocabulary = dict()
+    for lang, freqs in frequencies_over_vocabulary.items():
+        distribution_over_vocabulary[lang] = distribution_from_frequencies(freqs, NV)
+    
+    return distribution_over_vocabulary
+        
+
+def get_mlm_results(tok_type, alpha, NV, languages, seed=1234, alpha_train=0.25, metrics=('mrr', 'bpc')):
+    """
+    tok_type: 'multilingual', 'merged', 'nooverlap', 'bpe', 'bpe-nooverlap'
+    """
+    # decreasing vocab size for nooverlap
+    if 'nooverlap' in tok_type:
+        NV = NV // len(languages)
+        
+    # load results
+    results = {m: {} for m in metrics}
+    for metric in metrics:
+        for lang in languages:
+            try:
+                result_file = os.path.join(MODELS_DIR, "LM", f"{tok_type}-tokenization",
+                                       f"alpha-{alpha}_alpha-train-{alpha_train}_N-{NV}_{seed}", lang,
+                                       f"{metric}_eval_mrr_eval_all.txt")
+
+                res = json.load(open(result_file, 'r'))[f"eval_{metric}"]
+            except FileNotFoundError:
+                try:
+                    result_file = os.path.join(MODELS_DIR, "LM", f"{tok_type}-tokenization",
+                                               f"alpha-{alpha}_alpha-train-{alpha_train}_N-{NV}_{seed}", lang,
+                                               f"{metric}_eval_all.txt")
+                    res = json.load(open(result_file, 'r'))[f"eval_{metric}"]
+                except FileNotFoundError:
+                    print(f"{result_file} not found.")
+                    res = 0.0
+            results[metric][lang] = res
+
+    return results
+
+
+#TODO: write function to get results for downstream tasks
+def get_downstream_results(tok_type, alpha, NV, languages, task, ft_type='PROBE',
+                           seeds=(1234,1235, 1236, 1237, 1238), alpha_train=0.25, metrics=('f1-macro')):
+    
+    """
+    Get results for downstream tasks.
+    """
+
+    # decreasing vocab size for nooverlap
+    if 'nooverlap' in tok_type:
+        NV = NV // len(languages)
+        
+    results = {m: {} for m in metrics}
+    results_avg = {m: {} for m in metrics}
+    results_std = {m: {} for m in metrics}
+    for metric in metrics:
+        for src_lang in languages:
+            results[metric][src_lang] = {}
+            results_avg[metric][src_lang] = {}
+            results_std[metric][src_lang] = {}
+            for tgt_lang in languages:
+                results[metric][src_lang][tgt_lang] = []
+                for seed in seeds:
+                    try:
+                        result_file = os.path.join(MODELS_DIR, f"{task}_{ft_type}", f"{tok_type}-tokenization",
+                                                   f"alpha-{alpha}_alpha-train-{alpha_train}_N-{NV}_{seed}",
+                                                   src_lang, f"{metric}_evaluation", tgt_lang, f"{metric}_all.txt")
+                        results[metric][src_lang][tgt_lang].append(json.load(open(result_file, 'r'))[f"eval_{metric}"])
+                    except FileNotFoundError:
+                        print(f"{result_file} not found.")
+                        
+                if len(results[metric][src_lang][tgt_lang]) > 0:
+                    results_avg[metric][src_lang][tgt_lang] = np.mean(results[metric][src_lang][tgt_lang])
+                    results_std[metric][src_lang][tgt_lang] = np.std(results[metric][src_lang][tgt_lang])
+                else:
+                    results_avg[metric][src_lang][tgt_lang] = 0.0
+                    results_std[metric][src_lang][tgt_lang] = 0.0
+                    
+    return results_avg, results_std
+    
+        
 
