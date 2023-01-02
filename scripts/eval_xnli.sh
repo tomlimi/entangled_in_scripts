@@ -13,13 +13,14 @@
 cd /home/$USER/my-luster/entangled-in-scripts/entangled_in_scripts || exit 1;
 source /home/$USER/my-luster/entangled-in-scripts/eis/bin/activate
 
-alpha=$1
-train_alpha=$2
-vocab_size=$3
-lang_src=$4
-lang_tgt=$5
-seed=$6
-probe=$7
+model_type=$1
+alpha=$2
+train_alpha=$3
+vocab_size=$4
+lang_src=$5
+lang_tgt=$6
+seed=$7
+probe=$8
 
 if [ "$probe" = "False" ]; then
     eval_name="XNLI_FT"
@@ -27,7 +28,7 @@ else
     eval_name="XNLI_PROBE"
 fi
 
-input_path="/home/$USER/my-luster/entangled-in-scripts/models/${eval_name}/multilingual-tokenization/"
+input_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/${eval_name}/${model_type}/"
 name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
 # add probe to the name
 if [ "$probe" = "True" ]; then
@@ -36,7 +37,7 @@ fi
 model_path="$input_path/${name}_${seed}/$lang_src"
 
 # extract tokenizer path from the model_config json file
-model_config="/home/$USER/my-luster/entangled-in-scripts/models/config/multilingual-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
+model_config="/home/limisiewicz/my-luster/entangled-in-scripts/models/config/${model_type}/model_alpha-${alpha}_N-${vocab_size}.json"
 tokenizer_path=$(python -c "import json; print(json.load(open('$model_config'))['tokenizer_path'])")
 
 output_path=$model_path

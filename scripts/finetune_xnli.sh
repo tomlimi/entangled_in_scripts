@@ -13,24 +13,25 @@
 cd /home/$USER/my-luster/entangled-in-scripts/entangled_in_scripts || exit 1;
 source /home/$USER/my-luster/entangled-in-scripts/eis/bin/activate
 
-alpha=$1
-train_alpha=$2
-vocab_size=$3
-lang=$4
-seed=$5
-probe=$6
+model_type=$1
+alpha=$2
+train_alpha=$3
+vocab_size=$4
+lang=$5
+seed=$6
+probe=$7
 # rest of the parameters are passed to the finetune_xnli.py script
-additional=${@:7}
+additional=${@:8}
 
 in_seed=1234
 
-input_path="/home/$USER/my-luster/entangled-in-scripts/models/LM/multilingual-tokenization"
+input_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/LM/${model_type}"
 name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
 model_path="$input_path/${name}_${in_seed}"
 
 
 # extract tokenizer path from the model_config json file
-model_config="/home/$USER/my-luster/entangled-in-scripts/models/config/multilingual-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
+model_config="/home/limisiewicz/my-luster/entangled-in-scripts/models/config/${model_type}/model_alpha-${alpha}_N-${vocab_size}.json"
 tokenizer_path=$(python -c "import json; print(json.load(open('$model_config'))['tokenizer_path'])")
 
 
@@ -40,7 +41,7 @@ else
     eval_name="XNLI_PROBE"
 fi
 
-output_path="/home/$USER/my-luster/entangled-in-scripts/models/${eval_name}/multilingual-tokenization/"
+output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/${eval_name}/${model_type}/"
 
 # add probe to the name
 if [ "$probe" = "True" ]; then
@@ -65,10 +66,10 @@ echo ${name}
 python src/finetune_xnli.py \
     --model_name_or_path ${model_path} --tokenizer_name ${tokenizer_path} --output_dir ${model_output_path} --seed ${seed} --train_language ${lang} --language ${lang} \
     --max_seq_length 126 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --save_steps $eval_and_save_steps --eval_steps $eval_and_save_steps \
-    --save_total_limit 5 --learning_rate 2e-5 --weight_decay 0.01 --evaluation_strategy steps --do_train --do_eval --probe $probe $additional
+    --save_total_limit 1 --learning_rate 2e-5 --weight_decay 0.01 --evaluation_strategy steps --do_train --do_eval --probe $probe $additional
 
 
-chmod -R 770 $output_path || exit 0;
+chmod -R 770 $model_output_path || exit 0;
 
 echo end
 

@@ -8,16 +8,17 @@ vocab_size=120000
 seed=8888
 lang_src=en
 probe=True # True or False
+model_type="merged-tokenization"
 
-for lang_src in "es" # 'ar' 'el' 'es' 'tr' 'zh'
+for lang_src in "en" # 'ar' 'el' 'es' 'en' 'tr' 'zh'
 do
-    jid=$(sbatch finetune_xnli.sh $alpha $train_alpha $vocab_size $lang_src $seed $probe)
+    jid=$(sbatch finetune_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $seed $probe)
     jid=${jid##* }
     echo $lang_src
     echo $jid
     for lang_tgt in 'ar' 'el' 'en' 'es' 'tr' 'zh'
     do
-        sbatch --dependency=afterany:$jid eval_xnli.sh $alpha $train_alpha $vocab_size $lang_src $lang_tgt $seed $probe
+        sbatch --dependency=afterany:$jid eval_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $lang_tgt $seed $probe
     done
 
 done
