@@ -4,13 +4,13 @@ cd /home/$USER/my-luster/entangled-in-scripts/entangled_in_scripts/scripts || ex
 
 alpha=0.25
 train_alpha=0.25
-vocab_size=120000
 seed=8888
-lang_src=en
 probe=True # True or False
-model_type="merged-tokenization"
 
-for lang_src in "en" # 'ar' 'el' 'es' 'en' 'tr' 'zh'
+vocab_size=20000
+model_type="nooverlap-tokenization"
+
+for lang_src in 'ar' 'el' 'es' 'en' 'tr' 'zh'
 do
     jid=$(sbatch finetune_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $seed $probe)
     jid=${jid##* }
@@ -25,3 +25,7 @@ done
 
 # sleep 1s
 # tail -f ~/my-luster/entangled-in-scripts/job_outputs/xnli/finetune_$jid.out
+
+
+# runs that crashed:
+# sbatch eval_xnli.sh "multilingual-tokenization" 0.25 0.25 120000 es tr 8888 True

@@ -31,8 +31,8 @@ model_path="$input_path/${name}_${in_seed}"
 
 
 # extract tokenizer path from the model_config json file
-model_config="/home/limisiewicz/my-luster/entangled-in-scripts/models/config/${model_type}/model_alpha-${alpha}_N-${vocab_size}.json"
-tokenizer_path=$(python -c "import json; print(json.load(open('$model_config'))['tokenizer_path'])")
+model_config_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/config/${model_type}/model_alpha-${alpha}_N-${vocab_size}.json"
+# tokenizer_path=$(python -c "import json; print(json.load(open('$model_config_path'))['tokenizer_path'])")
 
 
 if [ "$probe" = "False" ]; then
@@ -55,16 +55,17 @@ echo start...
 echo XNLI
 echo ${input_path}
 echo ${output_path}
-echo ${model_config}
+echo ${model_config_path}
 echo ${tokenizer_path}
 echo ${name}
+echo $@
 
 # disable cuda
 # export CUDA_VISIBLE_DEVICES=""
 # python -m pdb src/finetune_xnli.py \
 
 python src/finetune_xnli.py \
-    --model_name_or_path ${model_path} --tokenizer_name ${tokenizer_path} --output_dir ${model_output_path} --seed ${seed} --train_language ${lang} --language ${lang} \
+    --model_name_or_path ${model_path} --model_config_path ${model_config_path} --output_dir ${model_output_path} --seed ${seed} --train_language ${lang} --language ${lang} \
     --max_seq_length 126 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --save_steps $eval_and_save_steps --eval_steps $eval_and_save_steps \
     --save_total_limit 1 --learning_rate 2e-5 --weight_decay 0.01 --evaluation_strategy steps --do_train --do_eval --probe $probe $additional
 
@@ -74,4 +75,4 @@ chmod -R 770 $model_output_path || exit 0;
 echo end
 
 # Example:
-# bash finetune_xnli.sh 0.25 0.25 120000 en 333 True --max_train_samples 1000
+# bash finetune_xnli.sh nooverlap-tokenization 0.25 0.25 20000 en 333 True --max_train_samples 1000

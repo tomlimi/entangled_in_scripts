@@ -34,7 +34,7 @@ import transformers
 from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
-    AutoTokenizer,
+    XLMRobertaTokenizerFast,
     DataCollatorWithPadding,
     EvalPrediction,
     HfArgumentParser,
@@ -138,6 +138,10 @@ class ModelArguments:
             "help": "Evaluation language. Also train language if `train_language` is set to None."
         },
     )
+    model_config_path: str = field(
+        default=None,
+        metadata={"help": "Path to custom model and tokenizer config files."},
+    )
     train_language: Optional[str] = field(
         default=None,
         metadata={
@@ -212,10 +216,6 @@ def main():
         (ModelArguments, DataTrainingArguments, TrainingArguments)
     )
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-
-    # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
-    # information sent is the one passed as arguments along with your Python/PyTorch versions.
-    send_example_telemetry("run_xnli", model_args)
 
     # Setup logging
     logging.basicConfig(
@@ -318,16 +318,31 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_args.tokenizer_name
-        if model_args.tokenizer_name
-        else model_args.model_name_or_path,
+    # Here we load the tokenizer from path specified in model_config
+    # if there are more tokenizers, we handle the no-overlap case
+    with open(model_args.model_config_path, "r") as fp:
+        model_config = json.load(fp)
+    if "tokenizer_lang" in model_config:
+        # this is the case where we have multiple tokenizers
+        language_list = model_config["tokenizer_lang"]
+        lang_index = language_list.index(model_args.language)
+        tokenizer_path = model_config["tokenizer_path"][lang_index]
+    else:
+        lang_index = 0
+        tokenizer_path = model_config["tokenizer_path"]
+
+    tokenizer = XLMRobertaTokenizerFast.from_pretrained(
+        tokenizer_path,
+        max_length=model_config["max_sent_len"],
         do_lower_case=model_args.do_lower_case,
         cache_dir=model_args.cache_dir,
         use_fast=model_args.use_fast_tokenizer,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
+    # compute the lang_offset. Will be 0 for single tokenizer
+    lang_offset = len(tokenizer) * lang_index
+
     model = AutoModelForSequenceClassification.from_pretrained(
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -352,13 +367,24 @@ def main():
 
     def preprocess_function(examples):
         # Tokenize the texts
-        return tokenizer(
+        inputs = tokenizer(
             examples["premise"],
             examples["hypothesis"],
             padding=padding,
             max_length=data_args.max_seq_length,
             truncation=True,
         )
+
+        # Add offset if set for the language
+        if lang_offset > 0:
+            print("Adding offset to the input ids", lang_offset)
+            # Only add offset to the non-special tokens
+            inputs["input_ids"] = [
+                [tok_id + lang_offset if tok_id > 4 else tok_id for tok_id in ii]
+                for ii in inputs["input_ids"]
+            ]
+
+        return inputs
 
     if training_args.do_train:
         if data_args.max_train_samples is not None:
