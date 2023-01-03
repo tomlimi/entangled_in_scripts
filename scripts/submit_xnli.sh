@@ -4,8 +4,11 @@ cd /home/$USER/my-luster/entangled-in-scripts/entangled_in_scripts/scripts || ex
 
 alpha=0.25
 train_alpha=0.25
-seed=8888
-probe=True # True or False
+seed=1234
+probe=False # True or False
+
+# vocab_size=120000
+# model_type="bpe-tokenization"
 
 vocab_size=20000
 model_type="nooverlap-tokenization"

@@ -2,7 +2,7 @@
 #SBATCH --mem=32g
 #SBATCH -N 1
 #SBATCH --cpus-per-task=2
-#SBATCH --time=2:00:00
+#SBATCH --time=5:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --constraint="gpuram40G|gpuram48G"
 #SBATCH -p gpu-troja,gpu-ms
