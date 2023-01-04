@@ -6,28 +6,42 @@ alpha=0.25
 train_alpha=0.25
 seed=1234
 probe=False # True or False
+custom_head=True
 
-# vocab_size=120000
+echo "probe: $probe"
+echo "custom_head: $custom_head"
+
+vocab_size=120000
 # model_type="bpe-tokenization"
+# model_type="merged-tokenization"
+# model_type="multilingual-tokenization"
+model_type="20l-multilingual-tokenization"
 
-vocab_size=20000
-model_type="nooverlap-tokenization"
+# vocab_size=20000
+# model_type="nooverlap-tokenization"
 
-for lang_src in 'ar' 'el' 'es' 'en' 'tr' 'zh'
+echo "model_type: $model_type"
+echo "vocab_size: $vocab_size"
+
+# langs=("ar" "el" "en" "es" "tr" "zh")
+langs=("ar" "bg" "de" "el" "en" "es" "fr" "hi" "ru" "sw" "th" "tr" "ur" "vi" "zh") # all XNLI languages
+echo "langs: ${langs[@]}"
+
+for lang_src in ${langs[@]}
 do
-    jid=$(sbatch finetune_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $seed $probe)
+    jid=$(sbatch finetune_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $seed $probe $custom_head --overwrite_output_dir)
     jid=${jid##* }
     echo $lang_src
     echo $jid
-    for lang_tgt in 'ar' 'el' 'en' 'es' 'tr' 'zh'
+    for lang_tgt in ${langs[@]}
     do
-        sbatch --dependency=afterany:$jid eval_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $lang_tgt $seed $probe
+        sbatch --dependency=afterany:$jid eval_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $lang_tgt $seed $probe $custom_head
     done
 
 done
 
-# sleep 1s
-# tail -f ~/my-luster/entangled-in-scripts/job_outputs/xnli/finetune_$jid.out
+sleep 1s
+tail -f ~/my-luster/entangled-in-scripts/job_outputs/xnli/finetune_$jid.out
 
 
 # runs that crashed:

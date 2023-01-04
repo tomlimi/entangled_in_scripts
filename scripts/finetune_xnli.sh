@@ -6,9 +6,11 @@
 #SBATCH --gres=gpu:1
 #SBATCH --constraint="gpuram40G|gpuram48G"
 #SBATCH -p gpu-troja,gpu-ms
-#SBATCH --mail-type=END,FAIL,TIME_LIMIT
+#SBATCH --mail-type=FAIL,TIME_LIMIT
 #SBATCH --mail-user=balhar.j@gmail.com
 #SBATCH --output=/home/balhar/my-luster/entangled-in-scripts/job_outputs/xnli/finetune_%j.out
+
+set +e
 
 cd /home/$USER/my-luster/entangled-in-scripts/entangled_in_scripts || exit 1;
 source /home/$USER/my-luster/entangled-in-scripts/eis/bin/activate
@@ -20,8 +22,9 @@ vocab_size=$4
 lang=$5
 seed=$6
 probe=$7
+custom_head=$8
 # rest of the parameters are passed to the finetune_xnli.py script
-additional=${@:8}
+additional=${@:9}
 
 in_seed=1234
 
@@ -41,7 +44,11 @@ else
     eval_name="XNLI_PROBE"
 fi
 
-output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/${eval_name}/${model_type}/"
+if [ "$custom_head" = "True" ]; then
+    eval_name="${eval_name}_XNLI_HEAD"
+fi
+
+output_path="/home/balhar/my-luster/entangled-in-scripts/models/${eval_name}/${model_type}/"
 
 # add probe to the name
 if [ "$probe" = "True" ]; then
@@ -66,8 +73,8 @@ echo $@
 
 python src/finetune_xnli.py \
     --model_name_or_path ${model_path} --model_config_path ${model_config_path} --output_dir ${model_output_path} --seed ${seed} --train_language ${lang} --language ${lang} \
-    --max_seq_length 126 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --save_steps $eval_and_save_steps --eval_steps $eval_and_save_steps \
-    --save_total_limit 1 --learning_rate 2e-5 --weight_decay 0.01 --evaluation_strategy steps --do_train --do_eval --probe $probe $additional
+    --max_seq_length 126 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --save_strategy no --eval_steps $eval_and_save_steps \
+    --learning_rate 2e-5 --weight_decay 0.01 --evaluation_strategy steps --do_train --do_eval --probe $probe --use_custom_xnli_head $custom_head $additional
 
 
 chmod -R 770 $model_output_path || exit 0;
@@ -75,4 +82,4 @@ chmod -R 770 $model_output_path || exit 0;
 echo end
 
 # Example:
-# bash finetune_xnli.sh nooverlap-tokenization 0.25 0.25 20000 en 333 True --max_train_samples 1000
+# bash finetune_xnli.sh nooverlap-tokenization 0.25 0.25 20000 en 333 True True --max_train_samples 1000

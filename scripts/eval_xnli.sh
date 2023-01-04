@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --constraint="gpuram40G|gpuram48G"
 #SBATCH -p gpu-troja,gpu-ms
-#SBATCH --mail-type=END,FAIL,TIME_LIMIT
+#SBATCH --mail-type=FAIL,TIME_LIMIT
 #SBATCH --mail-user=balhar.j@gmail.com
 #SBATCH --output=/home/balhar/my-luster/entangled-in-scripts/job_outputs/xnli/eval_%j.out
 
@@ -21,11 +21,16 @@ lang_src=$5
 lang_tgt=$6
 seed=$7
 probe=$8
+custom_head=$9
 
 if [ "$probe" = "False" ]; then
     eval_name="XNLI_FT"
 else
     eval_name="XNLI_PROBE"
+fi
+
+if [ "$custom_head" = "True" ]; then
+    eval_name="${eval_name}_XNLI_HEAD"
 fi
 
 input_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/${eval_name}/${model_type}/"
@@ -61,7 +66,7 @@ echo ${lang_tgt}
 # TODO: rename the script to run_xnli.py
 python src/finetune_xnli.py \
     --model_name_or_path ${model_path} --model_config_path ${model_config_path} --output_dir ${output_path} --language ${lang_tgt} \
-    --max_seq_length 126 --per_device_eval_batch_size 16 --do_predict
+    --max_seq_length 126 --per_device_eval_batch_size 16 --use_custom_xnli_head $custom_head --do_predict
 
 
 chmod -R 770 $output_path || exit 0;
@@ -69,4 +74,4 @@ chmod -R 770 $output_path || exit 0;
 echo end
 
 # Example:
-# bash eval_xnli.sh 0.25 0.25 120000 en 333 False
+# bash eval_xnli.sh 0.25 0.25 120000 en 333 False True
