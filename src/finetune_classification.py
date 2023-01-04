@@ -5,7 +5,7 @@ from transformers import set_seed
 from transformers import XLMRobertaTokenizerFast, XLMRobertaForTokenClassification
 # from transformers import XLMBertTokenizer, BertForTokenClassification
 from transformers import DataCollatorForTokenClassification
-from transformers import TrainingArguments, Trainer, IntervalStrategy
+from transformers import TrainingArguments, Trainer, IntervalStrategy, EarlyStoppingCallback
 import logging
 import sys
 import os, pickle
@@ -53,27 +53,31 @@ def load_and_finetune(pretrain_in_path, ft_out_path, model_config, truncate_at, 
     model = XLMRobertaForTokenClassification.from_pretrained(pretrain_in_path, num_labels=dataset.NUM_LABELS)
     if probe:
         logging.info("Probing scenario: freezeing base model.")
+        num_epochs = 30
         for param in model.base_model.parameters():
             param.requires_grad = False
-
+    else:
+        num_epochs = 3
     logging.info(f"#params:, {model.num_parameters()}")
 
     logging.info("Loading pretrain data..")
 
     os.makedirs(ft_out_path, exist_ok=True)
     gradient_accumulation_steps = 4
+    
     training_args = TrainingArguments(
         output_dir=ft_out_path,
         overwrite_output_dir=True,
-        num_train_epochs=3,
+        num_train_epochs=num_epochs,
         per_device_train_batch_size=16//gradient_accumulation_steps,
         per_device_eval_batch_size=8,
         gradient_accumulation_steps=gradient_accumulation_steps,
         save_steps=eval_and_save_steps,
         eval_steps=eval_and_save_steps,
-        save_total_limit=5,
+        save_total_limit=3,
         report_to=['tensorboard'],
         evaluation_strategy=IntervalStrategy.STEPS,
+        load_best_model_at_end=True,
         learning_rate=2e-5,
         weight_decay=0.01
     )
@@ -83,7 +87,8 @@ def load_and_finetune(pretrain_in_path, ft_out_path, model_config, truncate_at, 
         args=training_args,
         data_collator=data_collator,
         train_dataset=dataset.train,
-        eval_dataset=dataset.validation
+        eval_dataset=dataset.validation,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=5, early_stopping_threshold=0.0)]
     )
 
     if load_checkpoint:
@@ -149,7 +154,7 @@ if __name__ == '__main__':
     parser.add_argument('--probe', type=lambda x: (str(x).lower() == 'true'), required=False, default=True)
     parser.add_argument('--seed_in',type=int, required=False, default=1234)
     parser.add_argument('--seed',type=int, required=False, default=10)
-    parser.add_argument('--eval_and_save_steps', type=int, required=False, default=5000)
+    parser.add_argument('--eval_and_save_steps', type=int, required=False, default=1000)
 
     args = parser.parse_args()
     logging.info(vars(args))
