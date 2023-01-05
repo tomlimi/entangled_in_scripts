@@ -2,9 +2,9 @@
 #SBATCH --mem=32g
 #SBATCH -N 1
 #SBATCH --cpus-per-task=2
-#SBATCH --time=10:00
+#SBATCH --time=5:00
+#SBATCH --exclude=dll-8gpu3,dll-8gpu4
 #SBATCH --gres=gpu:1
-#SBATCH --constraint="gpuram40G|gpuram48G"
 #SBATCH -p gpu-troja,gpu-ms
 #SBATCH --mail-type=FAIL,TIME_LIMIT
 #SBATCH --mail-user=balhar.j@gmail.com
@@ -29,16 +29,8 @@ else
     eval_name="XNLI_PROBE"
 fi
 
-if [ "$custom_head" = "True" ]; then
-    eval_name="${eval_name}_XNLI_HEAD"
-fi
-
-input_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/${eval_name}/${model_type}/"
+input_path="/home/balhar/my-luster/entangled-in-scripts/models/${eval_name}/${model_type}/"
 name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
-# add probe to the name
-if [ "$probe" = "True" ]; then
-    name="${name}_probe"
-fi
 model_path="$input_path/${name}_${seed}/$lang_src"
 
 # extract tokenizer path from the model_config json file
@@ -66,7 +58,7 @@ echo ${lang_tgt}
 # TODO: rename the script to run_xnli.py
 python src/finetune_xnli.py \
     --model_name_or_path ${model_path} --model_config_path ${model_config_path} --output_dir ${output_path} --language ${lang_tgt} \
-    --max_seq_length 126 --per_device_eval_batch_size 16 --use_custom_xnli_head $custom_head --do_predict
+    --max_seq_length 126 --per_device_eval_batch_size 4 --eval_accumulation_steps 4 --use_custom_xnli_head $custom_head --do_predict
 
 
 chmod -R 770 $output_path || exit 0;

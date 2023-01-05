@@ -44,16 +44,7 @@ else
     eval_name="XNLI_PROBE"
 fi
 
-if [ "$custom_head" = "True" ]; then
-    eval_name="${eval_name}_XNLI_HEAD"
-fi
-
 output_path="/home/balhar/my-luster/entangled-in-scripts/models/${eval_name}/${model_type}/"
-
-# add probe to the name
-if [ "$probe" = "True" ]; then
-    name="${name}_probe"
-fi
 model_output_path="$output_path/${name}_$seed/$lang"
 
 eval_and_save_steps=5000
@@ -82,4 +73,4 @@ chmod -R 770 $model_output_path || exit 0;
 echo end
 
 # Example:
-# bash finetune_xnli.sh nooverlap-tokenization 0.25 0.25 20000 en 333 True True --max_train_samples 1000
+# bash finetune_xnli.sh nooverlap-tokenization 0.25 0.25 20000 en 333 True True --max_train_samples 1000 --precompute_model_outputs True

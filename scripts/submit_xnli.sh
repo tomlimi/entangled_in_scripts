@@ -14,8 +14,8 @@ echo "custom_head: $custom_head"
 vocab_size=120000
 # model_type="bpe-tokenization"
 # model_type="merged-tokenization"
-# model_type="multilingual-tokenization"
-model_type="20l-multilingual-tokenization"
+model_type="multilingual-tokenization"
+# model_type="20l-multilingual-tokenization"
 
 # vocab_size=20000
 # model_type="nooverlap-tokenization"
@@ -23,8 +23,8 @@ model_type="20l-multilingual-tokenization"
 echo "model_type: $model_type"
 echo "vocab_size: $vocab_size"
 
-# langs=("ar" "el" "en" "es" "tr" "zh")
-langs=("ar" "bg" "de" "el" "en" "es" "fr" "hi" "ru" "sw" "th" "tr" "ur" "vi" "zh") # all XNLI languages
+langs=("ar" "el" "en" "es" "tr" "zh")
+# langs=("ar" "bg" "de" "el" "en" "es" "fr" "hi" "ru" "sw" "th" "tr" "ur" "vi" "zh") # all XNLI languages
 echo "langs: ${langs[@]}"
 
 for lang_src in ${langs[@]}
@@ -35,6 +35,7 @@ do
     echo $jid
     for lang_tgt in ${langs[@]}
     do
+        # sbatch eval_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $lang_tgt $seed $probe $custom_head
         sbatch --dependency=afterany:$jid eval_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $lang_tgt $seed $probe $custom_head
     done
 
