@@ -73,4 +73,4 @@ chmod -R 770 $model_output_path || exit 0;
 echo end
 
 # Example:
-# bash finetune_xnli.sh nooverlap-tokenization 0.25 0.25 20000 en 333 True True --max_train_samples 1000 --precompute_model_outputs True
+# bash finetune_xnli.sh nooverlap-tokenization 0.25 0.25 20000 en 333 True True --max_train_samples 20 --overwrite_output_dir --precompute_model_outputs --num_train_epochs 30

@@ -48,6 +48,7 @@ from transformers import (
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
+import torch
 from xnli_utils import XLMRobertaXNLIHead, XLMRobertaForXNLI
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -149,6 +150,14 @@ class ModelArguments:
         metadata={
             "help": (
                 "Will use a custom head for XNLI instead of the one from Huggingface"
+            )
+        },
+    )
+    precompute_model_outputs: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "Precompute the model outputs for the dataset and cache them. Makes sense only for probing."
             )
         },
     )
@@ -367,6 +376,10 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
         ignore_mismatched_sizes=model_args.ignore_mismatched_sizes,
     )
+
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    model.to(device)
+
     if model_args.probe:
         logging.info("Probing scenario: freezing the base model.")
         for param in model.base_model.parameters():
@@ -381,23 +394,56 @@ def main():
         padding = False
 
     def preprocess_function(examples):
-        # Tokenize the texts
-        inputs = tokenizer(
-            examples["premise"],
-            examples["hypothesis"],
-            padding=padding,
-            max_length=data_args.max_seq_length,
-            truncation=True,
-        )
-
-        # Add offset if set for the language
-        if lang_offset > 0:
-            print("Adding offset to the input ids", lang_offset)
+        # Helping function for adding offset if set for the language
+        def _add_offset_to_input_ids(input_ids):
             # Only add offset to the non-special tokens
-            inputs["input_ids"] = [
+            return [
                 [tok_id + lang_offset if tok_id > 4 else tok_id for tok_id in ii]
-                for ii in inputs["input_ids"]
+                for ii in input_ids
             ]
+
+        # Precompute the sentence embeddings
+        if model_args.precompute_model_outputs:
+            # print("Precomputing the model outputs")
+            # Precompute the sentence embeddings for the premise and hypothesis
+            inputs = {
+                "premise_embedding": examples["premise"],
+                "hypothesis_embedding": examples["hypothesis"],
+            }
+            # First tokenize the texts
+            for k, v in inputs.items():
+                inputs[k] = tokenizer(
+                    v,
+                    padding=True,
+                    max_length=data_args.max_seq_length,
+                    truncation=True,
+                    return_tensors="pt",
+                )
+            # Then compute the sentence embeddings
+            with torch.no_grad():
+                model.eval()
+                for k, v in inputs.items():
+                    input_ids = v["input_ids"]
+                    if lang_offset > 0:
+                        input_ids = _add_offset_to_input_ids(input_ids)
+                    print(input_ids.shape)
+
+                    inputs[k] = model.compute_sentence_embeddings(
+                        input_ids=input_ids.to(device),
+                        attention_mask=v["attention_mask"].to(device),
+                    )
+        else:
+            # Tokenize the texts
+            inputs = tokenizer(
+                examples["premise"],
+                examples["hypothesis"],
+                padding=padding,
+                max_length=data_args.max_seq_length,
+                truncation=True,
+            )
+
+            if lang_offset > 0:
+                inputs["input_ids"] = _add_offset_to_input_ids(inputs["input_ids"])
 
         return inputs
 
@@ -406,10 +452,11 @@ def main():
             max_train_samples = min(len(train_dataset), data_args.max_train_samples)
             train_dataset = train_dataset.select(range(max_train_samples))
         with training_args.main_process_first(desc="train dataset map pre-processing"):
-            train_dataset = train_dataset.map(
+            train_dataset = train_dataset.map(lambda ex: {"premise_len": len(ex["premise"])}).sort("premise_len").map(
                 preprocess_function,
                 batched=True,
                 load_from_cache_file=not data_args.overwrite_cache,
+                batch_size=128,
                 desc="Running tokenizer on train dataset",
             )
         # Log a few random samples from the training set:
