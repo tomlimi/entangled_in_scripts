@@ -11,6 +11,7 @@ import sys
 import os, pickle
 
 from classification_dataset import XtremePOSClassificationDataset, XtremeNERClassificationDataset
+from utils import load_config
 
 
 def load_and_finetune(pretrain_in_path, ft_out_path, model_config, truncate_at, load_checkpoint, language, task='POS',
@@ -115,11 +116,6 @@ def load_and_finetune(pretrain_in_path, ft_out_path, model_config, truncate_at, 
         source_out.writelines(code_lines)
 
     logging.info("Done.")
-
-
-def load_config(config_path):
-    with open(config_path, 'r') as fp:
-        return json.load(fp)
 
 
 def finetune(args):
