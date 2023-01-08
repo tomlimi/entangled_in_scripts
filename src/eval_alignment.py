@@ -7,7 +7,7 @@ import torch
 from scipy.optimize import linear_sum_assignment
 import json
 
-from alignment_dataset import TatoebaAlignmentDataset
+from alignment_dataset import TatoebaAlignmentDataset, XtremeTatoebaAlignmentDataset
 from utils import load_config
 
 
@@ -69,7 +69,6 @@ def evaluate(args):
     tgt_lang = args.language_tgt
     metric_name = args.metric
 
-    
     pt_in_path = os.path.join(args.pretrain_path, args.pretrain_name + '_' +str(seed))
     output_path = os.path.join(args.out_path, args.pretrain_name + '_' + str(seed), src_lang,
                             metric_name + '_evaluation', tgt_lang)
@@ -106,12 +105,16 @@ def evaluate(args):
         lang_offset_tgt = 0
         
     logging.info("Loading dataset...")
-    # data_collator = (DataCollatorWithPadding(tokenizer=tokenizer_src, padding=True),
-    #                 DataCollatorWithPadding(tokenizer=tokenizer_tgt if tokenizer_tgt else tokenizer_src, padding=True))
-    
-    dataset = TatoebaAlignmentDataset(src_lang, tgt_lang, tokenizer_src, tokenizer_tgt, max_length=model_config['max_sent_len'],
-                                      lang_offset_src=lang_offset_src, lang_offset_tgt=lang_offset_tgt, evaluation=True)
-    
+
+    if src_lang == 'en' or tgt_lang == 'en':
+        dataset = XtremeTatoebaAlignmentDataset(src_lang, tgt_lang, tokenizer_src, tokenizer_tgt,
+                                                max_length=model_config['max_sent_len'],
+                                                lang_offset_src=lang_offset_src, lang_offset_tgt=lang_offset_tgt)
+    else:
+        dataset = TatoebaAlignmentDataset(src_lang, tgt_lang, tokenizer_src, tokenizer_tgt,
+                                          max_length=model_config['max_sent_len'],
+                                          lang_offset_src=lang_offset_src, lang_offset_tgt=lang_offset_tgt)
+
     logging.info(f"Loading model")
     model = XLMRobertaModel.from_pretrained(pt_in_path)
     logging.info(f"#params:, {model.num_parameters()}")
