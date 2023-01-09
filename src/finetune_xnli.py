@@ -44,6 +44,7 @@ from transformers import (
     TrainingArguments,
     default_data_collator,
     set_seed,
+    EarlyStoppingCallback,
 )
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, send_example_telemetry
@@ -397,10 +398,11 @@ def main():
         # Helping function for adding offset if set for the language
         def _add_offset_to_input_ids(input_ids):
             # Only add offset to the non-special tokens
-            return [
-                [tok_id + lang_offset if tok_id > 4 else tok_id for tok_id in ii]
-                for ii in input_ids
-            ]
+            return torch.where(input_ids > 4, input_ids + lang_offset, input_ids)
+            # return [
+            #     [tok_id + lang_offset if tok_id > 4 else tok_id for tok_id in ii]
+            #     for ii in input_ids
+            # ]
 
         # Precompute the sentence embeddings
         if model_args.precompute_model_outputs:
@@ -426,7 +428,6 @@ def main():
                     input_ids = v["input_ids"]
                     if lang_offset > 0:
                         input_ids = _add_offset_to_input_ids(input_ids)
-                    print(input_ids.shape)
 
                     inputs[k] = model.compute_sentence_embeddings(
                         input_ids=input_ids.to(device),
@@ -440,6 +441,7 @@ def main():
                 padding=padding,
                 max_length=data_args.max_seq_length,
                 truncation=True,
+                return_tensors="pt",
             )
 
             if lang_offset > 0:
@@ -452,12 +454,16 @@ def main():
             max_train_samples = min(len(train_dataset), data_args.max_train_samples)
             train_dataset = train_dataset.select(range(max_train_samples))
         with training_args.main_process_first(desc="train dataset map pre-processing"):
-            train_dataset = train_dataset.map(lambda ex: {"premise_len": len(ex["premise"])}).sort("premise_len").map(
-                preprocess_function,
-                batched=True,
-                load_from_cache_file=not data_args.overwrite_cache,
-                batch_size=128,
-                desc="Running tokenizer on train dataset",
+            train_dataset = (
+                train_dataset.map(lambda ex: {"premise_len": len(ex["premise"])})
+                .sort("premise_len")
+                .map(
+                    preprocess_function,
+                    batched=True,
+                    load_from_cache_file=not data_args.overwrite_cache,
+                    batch_size=128,
+                    desc="Running tokenizer on train dataset",
+                )
             )
         # Log a few random samples from the training set:
         for index in random.sample(range(len(train_dataset)), 3):
@@ -520,6 +526,11 @@ def main():
         compute_metrics=compute_metrics,
         tokenizer=tokenizer,
         data_collator=data_collator,
+        callbacks=[
+            EarlyStoppingCallback(
+                early_stopping_patience=5, early_stopping_threshold=0.0
+            )
+        ],
     )
 
     # Training
