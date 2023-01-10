@@ -35,15 +35,7 @@ do
     jid=0
     for seed in "2000" "2001" "2002" "2003" "2004"
     do
-        # it is better to wait for the first job to finish before submitting the next one because the results 
-        # will be cached and the subsequent jobs will be faster
-        if [ $jid -eq 0 ]
-        then
-            dependency=""
-        else
-            dependency="--dependency=afterany:$jid"
-        fi
-        jid=$(sbatch $dependency finetune_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $seed $probe $custom_head --overwrite_output_dir --precompute_model_outputs --num_train_epochs $epochs)
+        jid=$(sbatch finetune_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $seed $probe $custom_head --overwrite_output_dir --precompute_model_outputs --num_train_epochs $epochs)
         jid=${jid##* }
         echo $lang_src
         echo $jid

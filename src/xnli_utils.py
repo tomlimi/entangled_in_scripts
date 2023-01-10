@@ -44,8 +44,12 @@ class XLMRobertaForXNLI(XLMRobertaPreTrainedModel):
             return_dict=True,
         )
         # the format of features is (batch_size, seq_len, hidden_size)
-        mean = torch.mean(outputs[0], dim=1)
-        return mean
+        masked_features = outputs[0] * attention_mask.unsqueeze(-1)
+        masked_mean = torch.sum(masked_features, dim=1) / torch.sum(
+            attention_mask, dim=1, keepdim=True
+        )
+
+        return masked_mean
 
     def forward(
         self,

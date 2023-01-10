@@ -1,19 +1,9 @@
 #!/usr/bin/env python
 # coding=utf-8
-# Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
-# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+
+# This script is adapted from the XNLI example script from the huggingface repository
+# https://github.com/huggingface/transformers/blob/main/examples/pytorch/text-classification/run_xnli.py
+
 """ Finetuning multi-lingual models on XNLI (e.g. Bert, DistilBERT, XLM).
     Adapted from `examples/text-classification/run_glue.py`"""
 
@@ -24,6 +14,7 @@ import random
 import sys
 from dataclasses import dataclass, field
 from typing import Optional, Union, Tuple
+
 
 import datasets
 import numpy as np
@@ -147,7 +138,7 @@ class ModelArguments:
         metadata={"help": "Path to custom model and tokenizer config files."},
     )
     use_custom_xnli_head: bool = field(
-        default=False,
+        default=True,
         metadata={
             "help": (
                 "Will use a custom head for XNLI instead of the one from Huggingface"
@@ -399,10 +390,6 @@ def main():
         def _add_offset_to_input_ids(input_ids):
             # Only add offset to the non-special tokens
             return torch.where(input_ids > 4, input_ids + lang_offset, input_ids)
-            # return [
-            #     [tok_id + lang_offset if tok_id > 4 else tok_id for tok_id in ii]
-            #     for ii in input_ids
-            # ]
 
         # Precompute the sentence embeddings
         if model_args.precompute_model_outputs:

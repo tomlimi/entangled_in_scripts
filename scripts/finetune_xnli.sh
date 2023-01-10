@@ -10,7 +10,7 @@
 #SBATCH --mail-user=balhar.j@gmail.com
 #SBATCH --output=/home/balhar/my-luster/entangled-in-scripts/job_outputs/xnli/finetune_%j.out
 
-set +e
+set -e
 
 cd /home/$USER/my-luster/entangled-in-scripts/entangled_in_scripts || exit 1;
 source /home/$USER/my-luster/entangled-in-scripts/eis/bin/activate
@@ -64,8 +64,9 @@ export TOKENIZERS_PARALLELISM=false
 
 python src/finetune_xnli.py \
     --model_name_or_path ${model_path} --model_config_path ${model_config_path} --output_dir ${model_output_path} --seed ${seed} --train_language ${lang} --language ${lang} \
-    --max_seq_length 126 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --save_strategy epoch --save_total_limit 0 \
+    --max_seq_length 126 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --save_strategy epoch --save_total_limit 1 \
     --dataloader_num_workers 32 --use_fast_tokenizer False --load_best_model_at_end --metric_for_best_model accuracy \
+    --overwrite_cache \
     --learning_rate 2e-5 --weight_decay 0.01 --evaluation_strategy epoch --do_train --do_eval --probe $probe --use_custom_xnli_head $custom_head $additional
 
 
@@ -74,4 +75,4 @@ chmod -R 770 $model_output_path || exit 0;
 echo end
 
 # Example:
-# bash finetune_xnli.sh nooverlap-tokenization 0.25 0.25 20000 en 333 True True --max_train_samples 5000 --overwrite_output_dir  --precompute_model_outputs --num_train_epochs 30 --load_best_model_at_end --dataloader_num_workers 32
+# bash finetune_xnli.sh nooverlap-tokenization 0.25 0.25 20000 en 333 True True --max_train_samples 5000 --overwrite_output_dir --precompute_model_outputs --num_train_epochs 30
