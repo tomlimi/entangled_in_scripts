@@ -11,20 +11,21 @@ epochs=30
 echo "probe: $probe"
 echo "custom_head: $custom_head"
 
-vocab_size=120000
-langs=("ar" "el" "en" "es" "tr" "zh")
-model_type="multilingual-tokenization"
+# vocab_size=120000
+# langs=("ar" "el" "en" "es" "tr" "zh")
+# model_type="multilingual-tokenization"
 # model_type="merged-tokenization"
 # model_type="bpe-tokenization"
 
 # vocab_size=20000
 # model_type="nooverlap-tokenization"
 
-# vocab_size=120000
-# langs=("ar" "bg" "de" "el" "en" "es" "fr" "hi" "ru" "sw" "th" "tr" "ur" "vi" "zh") # all XNLI languages
-# model_type="20l-multilingual-tokenization"
+vocab_size=120000
+langs=("ar" "bg" "de" "el" "en" "es" "fr" "hi" "ru" "sw" "th" "tr" "ur" "vi" "zh") # all XNLI languages
+# langs=("ar") # all XNLI languages
+model_type="20l-multilingual-tokenization"
 # model_type="20l-merged-tokenization"
-# model_type="20l-multilingual-tokenization"
+# model_type="20l-bpe-tokenization"
 
 echo "model_type: $model_type"
 echo "vocab_size: $vocab_size"
@@ -32,8 +33,7 @@ echo "vocab_size: $vocab_size"
 echo "langs: ${langs[@]}"
 for lang_src in ${langs[@]}
 do
-    jid=0
-    for seed in "2000" "2001" "2002" "2003" "2004"
+    for seed in "2001" "2002"
     do
         jid=$(sbatch finetune_xnli.sh $model_type $alpha $train_alpha $vocab_size $lang_src $seed $probe $custom_head --overwrite_output_dir --precompute_model_outputs --num_train_epochs $epochs)
         jid=${jid##* }
