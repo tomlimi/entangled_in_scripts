@@ -53,3 +53,6 @@ done
 
 # runs that crashed:
 # sbatch eval_xnli.sh "multilingual-tokenization" 0.25 0.25 120000 es tr 8888 True
+
+# after evaluation, clean up the model checkpoints:
+# find /home/balhar/my-luster/entangled-in-scripts/models/XNLI_PROBE/ -name "pytorch_model.bin" -delete
