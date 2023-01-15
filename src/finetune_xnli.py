@@ -77,6 +77,12 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "Overwrite the cached preprocessed datasets or not."},
     )
+    keep_in_memory: bool = field(
+        default=False,
+        metadata={
+            "help": "Keep the dataset in memory instead of writing it to a cache file."
+        },
+    )
     pad_to_max_length: bool = field(
         default=True,
         metadata={
@@ -448,6 +454,7 @@ def main():
                     preprocess_function,
                     batched=True,
                     load_from_cache_file=not data_args.overwrite_cache,
+                    keep_in_memory=data_args.keep_in_memory,
                     batch_size=128,
                     desc="Running tokenizer on train dataset",
                 )
@@ -467,6 +474,7 @@ def main():
                 preprocess_function,
                 batched=True,
                 load_from_cache_file=not data_args.overwrite_cache,
+                keep_in_memory=data_args.keep_in_memory,
                 desc="Running tokenizer on validation dataset",
             )
 
@@ -483,6 +491,7 @@ def main():
                 preprocess_function,
                 batched=True,
                 load_from_cache_file=not data_args.overwrite_cache,
+                keep_in_memory=data_args.keep_in_memory,
                 desc="Running tokenizer on prediction dataset",
             )
 

@@ -66,14 +66,14 @@ python src/finetune_xnli.py \
     --model_name_or_path ${model_path} --model_config_path ${model_config_path} --output_dir ${model_output_path} --seed ${seed} --train_language ${lang} --language ${lang} \
     --max_seq_length 126 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --save_strategy epoch --save_total_limit 1 \
     --dataloader_num_workers 32 --use_fast_tokenizer False --load_best_model_at_end --metric_for_best_model accuracy \
-    --overwrite_cache True \
+    --keep_in_memory True \
     --learning_rate 2e-5 --weight_decay 0.01 --evaluation_strategy epoch --do_train --do_eval --probe $probe --use_custom_xnli_head $custom_head $additional
 
 
 chmod -R 770 $model_output_path || exit 0;
 
 # clean the cache
-rm /home/balhar/.cache/huggingface/datasets/xnli/${lang}/*/*/cache*
+# rm /home/balhar/.cacsahe/huggingface/datasets/xnli/${lang}/*/*/cache*
 
 echo end
 
