@@ -3,14 +3,16 @@ import json
 import argparse
 from transformers import set_seed
 from transformers import XLMRobertaTokenizerFast, XLMRobertaForTokenClassification
-from transformers import DataCollatorForTokenClassification
+from transformers import DataCollatorWithPadding
 from transformers import (
     TrainingArguments,
     Trainer,
     IntervalStrategy,
     EarlyStoppingCallback,
     default_data_collator,
+    EvalPrediction,
 )
+import evaluate
 import logging
 import sys
 import os, pickle
@@ -28,22 +30,10 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 import torch
 from torch import nn
 
-
-class XLMRobertaArcPredictionHead(nn.Module):
-    """Head for predicting the head of each input word."""
-
-    def __init__(self, config):
-        super().__init__()
-        self.out_proj = nn.Linear(config.hidden_size * 3, config.num_labels)
-
-    def forward(self, mean_a, mean_b, **kwargs):
-        features = torch.cat((mean_a, mean_b, mean_a * mean_b), dim=1)
-        x = self.out_proj(features)
-        return x
+import numpy as np
 
 
-# Copied from transformers.models.roberta.modeling_roberta.RobertaForSequenceClassification with Roberta->XLMRoberta, ROBERTA->XLM_ROBERTA
-class XLMRobertaForSequenceClassification(XLMRobertaPreTrainedModel):
+class XLMRobertaForUD(XLMRobertaPreTrainedModel):
     _keys_to_ignore_on_load_missing = [r"position_ids"]
 
     def __init__(self, config):
@@ -52,7 +42,8 @@ class XLMRobertaForSequenceClassification(XLMRobertaPreTrainedModel):
         self.config = config
 
         self.roberta = XLMRobertaModel(config, add_pooling_layer=False)
-        self.classifier = XLMRobertaClassificationHead(config)
+
+        self.classifier = nn.Linear(config.hidden_size * 3, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -82,23 +73,45 @@ class XLMRobertaForSequenceClassification(XLMRobertaPreTrainedModel):
             return_dict if return_dict is not None else self.config.use_return_dict
         )
 
-        outputs = self.roberta(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            head_mask=head_mask,
-            inputs_embeds=inputs_embeds,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
+        if self.probe:
+            with torch.no_grad():
+                self.roberta.eval()
+                outputs = self.roberta(
+                    input_ids,
+                    attention_mask=attention_mask,
+                    token_type_ids=token_type_ids,
+                    position_ids=position_ids,
+                    head_mask=head_mask,
+                    inputs_embeds=inputs_embeds,
+                    output_attentions=output_attentions,
+                    output_hidden_states=output_hidden_states,
+                    return_dict=return_dict,
+                )
+        else:
+            outputs = self.roberta(
+                input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids,
+                head_mask=head_mask,
+                inputs_embeds=inputs_embeds,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+            )
         sequence_output = outputs[0]
-        logits = self.classifier(sequence_output)
+
+        # get the contextualized embeddings of the source and destination tokens
+        batch_size = sequence_output.shape[0]
+        srcs = sequence_output[torch.arange(batch_size), src]
+        dsts = sequence_output[torch.arange(batch_size), dst]
+        classifier_input = torch.cat([srcs, dsts, srcs * dsts], dim=1)
+
+        logits = self.classifier(classifier_input)
 
         loss = None
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
+            loss_fct = nn.CrossEntropyLoss()
             loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
 
         if not return_dict:
@@ -111,118 +124,6 @@ class XLMRobertaForSequenceClassification(XLMRobertaPreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
-
-
-# Copied from transformers.models.roberta.modeling_roberta.RobertaForSequenceClassification with Roberta->XLMRoberta, ROBERTA->XLM_ROBERTA
-class XLMRobertaForUD(XLMRobertaPreTrainedModel):
-    _keys_to_ignore_on_load_missing = [r"position_ids"]
-
-    def __init__(self, config):
-        super().__init__(config)
-        self.num_labels = config.num_labels
-        self.config = config
-
-        self.roberta = XLMRobertaModel(config, add_pooling_layer=False)
-        self.classifier = XLMRobertaArcPredictionHead(config)
-
-        # Initialize weights and apply final processing
-        self.post_init()
-
-    def compute_contextualized_embeddings(self, input_ids, attention_mask):
-        outputs = self.roberta(
-            input_ids,
-            attention_mask=attention_mask,
-            return_dict=True,
-        )
-        # the format of features is (batch_size, seq_len, hidden_size)
-        return outputs.last_hidden_state
-
-    def forward(
-        self,
-        input_ids: Optional[torch.LongTensor] = None,
-        attention_mask: Optional[torch.FloatTensor] = None,
-        token_type_ids: Optional[torch.LongTensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        head_mask: Optional[torch.FloatTensor] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        labels: Optional[torch.LongTensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
-        src: Optional[torch.LongTensor] = None,
-        dst: Optional[torch.LongTensor] = None,
-    ) -> Union[Tuple[torch.Tensor], SequenceClassifierOutput]:
-        r"""
-        labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
-            Labels for computing the sequence classification/regression loss. Indices should be in `[0, ...,
-            config.num_labels - 1]`. A classification loss is computed (Cross-Entropy).
-        """
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
-
-        if premise_embedding is None or hypothesis_embedding is None:
-            assert input_ids is not None
-
-            # split input_ids into two parts
-            # find the first occurence of the separator token
-            sep_token_id = 2  # TODO: do not hardcode this
-            # we have input_ids shape (batch_size, seq_len) eg (16, 126)
-            # for each sequence we find the separator tokens
-            is_sep = (input_ids == sep_token_id).type(torch.uint8)
-            sep_indices = is_sep.argmax(dim=1)
-            # test using native python
-            # assert sep_indices.tolist() == [
-            #     i.tolist().index(sep_token_id) for i in input_ids
-            # ]
-
-            sep_indices += 1  # add one to account for the separator token
-            input_ids_a = torch.ones_like(input_ids)
-            attention_mask_a = torch.zeros_like(attention_mask)
-            input_ids_b = torch.ones_like(input_ids)
-            attention_mask_b = torch.zeros_like(attention_mask)
-            for i, j in enumerate(sep_indices):
-                # extract the first part of the sequence batch
-                input_ids_a[i, :j] = input_ids[i, :j]
-                attention_mask_a[i, :j] = 1
-                # extract the second part of the sequence batch
-                input_ids_b[i, : input_ids.shape[1] - j] = input_ids[i, j:]
-                input_ids_b[i, 0] = 0  # TODO: do not hardcode this
-                attention_mask_b[i, : input_ids.shape[1] - j] = attention_mask[i, j:]
-                # torch.set_printoptions(threshold=10000)
-                # print(f"input_ids[{i}]\n", input_ids[i])
-                # print(f"attention_mask[{i}]\n", attention_mask[i])
-                # print(f"input_ids_a[{i}]\n", input_ids_a[i])
-                # print(f"input_ids_b[{i}]\n", input_ids_b[i])
-                # print(f"attention_mask_a[{i}]\n", attention_mask_a[i])
-                # print(f"attention_mask_b[{i}]\n", attention_mask_b[i])
-                # print(f"input_ids_b.shape\n", input_ids_b.shape)
-                # print(f"attention_mask_b.shape\n", attention_mask_b.shape)
-
-            premise_embedding = self.compute_sentence_embeddings(
-                input_ids_a, attention_mask_a
-            )
-            hypothesis_embedding = self.compute_sentence_embeddings(
-                input_ids_b, attention_mask_b
-            )
-
-        logits = self.classifier(premise_embedding, hypothesis_embedding)
-        loss = None
-        if labels is not None:
-            loss_fct = nn.CrossEntropyLoss()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-
-        if not return_dict:
-            output = (logits,) + outputs[2:]
-            return ((loss,) + output) if loss is not None else output
-
-        output = SequenceClassifierOutput(
-            loss=loss,
-            logits=logits,
-            hidden_states=None,
-            attentions=None,
-        )
-        return output
 
 
 def load_and_finetune(
@@ -259,7 +160,7 @@ def load_and_finetune(
         max_length=model_config["max_sent_len"],
         lang_offset=lang_offset,
     )
-    data_collator = default_data_collator
+    data_collator = DataCollatorWithPadding(tokenizer)  # for fp16: pad_to_multiple_of=8
 
     # init trainer:
     logging.info("Loading pretrained model...")
@@ -272,6 +173,7 @@ def load_and_finetune(
     model = XLMRobertaForUD.from_pretrained(
         pretrain_input_path, num_labels=dataset.NUM_LABELS
     )
+    model.probe = probe
     if probe:
         logging.info("Probing scenario: freezing base model.")
         num_epochs = 30
@@ -286,14 +188,31 @@ def load_and_finetune(
     logging.info("Loading pretrain data..")
 
     os.makedirs(ft_output_path, exist_ok=True)
-    gradient_accumulation_steps = 1
 
+    # Get the metric function
+    f1_metric = evaluate.load("f1")
+    recall_metric = evaluate.load("recall")
+    precision_metric = evaluate.load("precision")
+
+    # You can define your custom compute_metrics function. It takes an `EvalPrediction` object (a namedtuple with a
+    # predictions and label_ids field) and has to return a dictionary string to float.
+    def compute_metrics(p: EvalPrediction):
+        preds = p.predictions[0] if isinstance(p.predictions, tuple) else p.predictions
+        preds = np.argmax(preds, axis=1)
+        breakpoint()
+        f1 = f1_metric.compute(predictions=preds, references=p.label_ids)
+        recall = recall_metric.compute(predictions=preds, references=p.label_ids)
+        precision = precision_metric.compute(predictions=preds, references=p.label_ids)
+        return {**f1, **recall, **precision}
+
+    gradient_accumulation_steps = 1
     training_args = TrainingArguments(
         output_dir=ft_output_path,
         overwrite_output_dir=True,
         num_train_epochs=num_epochs,
-        per_device_train_batch_size=16 // gradient_accumulation_steps,
-        per_device_eval_batch_size=8,
+        per_device_train_batch_size=64 // gradient_accumulation_steps,
+        per_device_eval_batch_size=32,
+        dataloader_num_workers=16,
         gradient_accumulation_steps=gradient_accumulation_steps,
         save_steps=eval_and_save_steps,
         eval_steps=eval_and_save_steps,
@@ -310,7 +229,8 @@ def load_and_finetune(
         args=training_args,
         data_collator=data_collator,
         train_dataset=dataset.train,
-        eval_dataset=dataset.validation,
+        eval_dataset=dataset.train,
+        compute_metrics=compute_metrics,
         callbacks=[
             EarlyStoppingCallback(
                 early_stopping_patience=5, early_stopping_threshold=0.0

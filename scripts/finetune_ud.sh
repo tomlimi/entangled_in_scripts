@@ -39,10 +39,12 @@ echo "pt_input_path $pt_input_path"
 echo "ft_output_path $ft_output_path"
 echo "model_config_path $model_config_path"
 
+export TOKENIZERS_PARALLELISM=false
+
 python src/finetune_ud.py \
     --pt_input_path $pt_input_path --ft_output_path $ft_output_path --model_config_path $model_config_path \
     --language $lang --seed $seed \
-    --truncate_at 1000 \
+    --truncate_at 10 --eval_and_save_steps 100 \
     --probe
 
 chmod -R 770 $output_path || exit 0;
