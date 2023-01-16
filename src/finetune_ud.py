@@ -13,7 +13,6 @@ from transformers import (
     EvalPrediction,
 )
 import evaluate
-import logging
 import sys
 import os, pickle
 
@@ -31,6 +30,10 @@ import torch
 from torch import nn
 
 import numpy as np
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 
 class XLMRobertaForUD(XLMRobertaPreTrainedModel):
@@ -130,7 +133,9 @@ def load_and_finetune(
     pretrain_input_path,
     ft_output_path,
     model_config,
-    truncate_at,
+    max_train_samples,
+    max_eval_samples,
+    max_test_samples,
     load_checkpoint,
     language,
     seed,
@@ -138,12 +143,6 @@ def load_and_finetune(
     probe,
 ):
     set_seed(seed)
-    # set verbosity
-    logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO,
-    )
 
     logging.info("Loading tokenizer...")
     # get tokenizer:
@@ -156,9 +155,11 @@ def load_and_finetune(
     dataset = UDDataset(
         language,
         tokenizer,
-        truncate_at=truncate_at,
         max_length=model_config["max_sent_len"],
         lang_offset=lang_offset,
+        max_train_samples=max_train_samples,
+        max_eval_samples=max_eval_samples,
+        max_test_samples=max_test_samples,
     )
     data_collator = DataCollatorWithPadding(tokenizer)  # for fp16: pad_to_multiple_of=8
 
@@ -199,7 +200,6 @@ def load_and_finetune(
     def compute_metrics(p: EvalPrediction):
         preds = p.predictions[0] if isinstance(p.predictions, tuple) else p.predictions
         preds = np.argmax(preds, axis=1)
-        breakpoint()
         f1 = f1_metric.compute(predictions=preds, references=p.label_ids)
         recall = recall_metric.compute(predictions=preds, references=p.label_ids)
         precision = precision_metric.compute(predictions=preds, references=p.label_ids)
@@ -212,10 +212,10 @@ def load_and_finetune(
         num_train_epochs=num_epochs,
         per_device_train_batch_size=64 // gradient_accumulation_steps,
         per_device_eval_batch_size=32,
-        dataloader_num_workers=16,
         gradient_accumulation_steps=gradient_accumulation_steps,
         save_steps=eval_and_save_steps,
         eval_steps=eval_and_save_steps,
+        dataloader_num_workers=4,
         save_total_limit=2,
         report_to=["tensorboard"],
         evaluation_strategy=IntervalStrategy.STEPS,
@@ -229,7 +229,7 @@ def load_and_finetune(
         args=training_args,
         data_collator=data_collator,
         train_dataset=dataset.train,
-        eval_dataset=dataset.train,
+        eval_dataset=dataset.validation,
         compute_metrics=compute_metrics,
         callbacks=[
             EarlyStoppingCallback(
@@ -274,7 +274,9 @@ def finetune(args):
         args.pt_input_path,
         args.ft_output_path,
         model_config,
-        args.truncate_at,
+        args.max_train_samples,
+        args.max_eval_samples,
+        args.max_test_samples,
         args.load_checkpoint,
         args.language,
         args.seed,
@@ -289,7 +291,9 @@ if __name__ == "__main__":
     parser.add_argument("--ft_output_path", type=str, required=True)
     parser.add_argument("--model_config_path", type=str, required=True)
     parser.add_argument("--language", type=str, required=True)
-    parser.add_argument("--truncate_at", type=int, required=False, default=-1)
+    parser.add_argument("--max_train_samples", type=int, required=False, default=None)
+    parser.add_argument("--max_eval_samples", type=int, required=False, default=None)
+    parser.add_argument("--max_test_samples", type=int, required=False, default=None)
     parser.add_argument("--load_checkpoint", action=argparse.BooleanOptionalAction)
     parser.add_argument("--probe", action=argparse.BooleanOptionalAction)
     parser.add_argument("--seed", type=int, required=False, default=10)

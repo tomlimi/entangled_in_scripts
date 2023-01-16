@@ -39,12 +39,14 @@ echo "pt_input_path $pt_input_path"
 echo "ft_output_path $ft_output_path"
 echo "model_config_path $model_config_path"
 
+# export CUDA_VISIBLE_DEVICES=""
+
 export TOKENIZERS_PARALLELISM=false
 
 python src/finetune_ud.py \
     --pt_input_path $pt_input_path --ft_output_path $ft_output_path --model_config_path $model_config_path \
     --language $lang --seed $seed \
-    --truncate_at 10 --eval_and_save_steps 100 \
+    --max_train_samples 64000 --max_eval_samples 6400 --eval_and_save_steps 200 \
     --probe
 
 chmod -R 770 $output_path || exit 0;

@@ -2,6 +2,9 @@ import torch
 from abc import abstractmethod
 from datasets import Dataset, load_dataset
 import transformers
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 
 class UDDataset:
@@ -29,13 +32,24 @@ class UDDataset:
     }
     NUM_LABELS = 2
 
-    def __init__(self, language, tokenizer, truncate_at, max_length, lang_offset):
+    def __init__(
+        self,
+        language,
+        tokenizer,
+        max_length,
+        lang_offset,
+        max_train_samples,
+        max_eval_samples,
+        max_test_samples,
+    ):
         self.language = language
         self.tokenizer = tokenizer
-        self.truncate_at = truncate_at
         self.max_length = max_length - 2
         self.lang_offset = lang_offset
         self.padding = False
+        self.max_train_samples = max_train_samples
+        self.max_eval_samples = max_eval_samples
+        self.max_test_samples = max_test_samples
 
         config = self.lang_to_config[language]
         if config is None:
@@ -60,7 +74,8 @@ class UDDataset:
 
         return inputs
 
-    def align_labels(self, examples):
+    @staticmethod
+    def align_labels(examples, tokenizer, max_length):
         examples_labels = []
         for text, words, heads, input_ids in zip(
             examples["text"],
@@ -74,7 +89,7 @@ class UDDataset:
             labels.append(-100)
             token_index_mapping = [0]
             for i, (word, head) in enumerate(zip(words, heads)):
-                subword_tokens = self.tokenizer(word, add_special_tokens=False)
+                subword_tokens = tokenizer.encode(word, add_special_tokens=False)
                 token_index_mapping.append(len(labels))
                 # new_input_ids.extend(subword_tokens)
                 first_subword = True
@@ -84,19 +99,26 @@ class UDDataset:
                         first_subword = False
                     else:
                         labels.append(-100)
+            # renumber labels to the first subwords
             for i in range(len(labels)):
                 if labels[i] != -100:
                     labels[i] = token_index_mapping[labels[i]]
-            labels = labels[: self.max_length - 1]  # truncating labels
+                    # skip labels that are out of range
+                    if labels[i] >= max_length - 1:
+                        labels[i] = -100
+            labels = labels[: max_length - 1]  # truncating labels
+            labels.append(-100)
             # pad labels
             # while len(labels) < self.max_length - 1:
             #     labels.append(-100)
 
             # new_input_ids = new_input_ids[: self.max_length - 1]  # truncating input_ids
             # new_input_ids.append(2)
-            # labels.append(-100)
             # print(new_input_ids, input_ids)
             # assert new_input_ids == input_ids
+
+            for label in labels:
+                assert label >= -100 and label < len(input_ids)
             examples_labels.append(labels)
 
         return {"labels": examples_labels}
@@ -128,33 +150,40 @@ class UDDataset:
                         new_examples["dst"].append(dst)
         return new_examples
 
-    def _prepare_dataset(self, dataset):
+    def _prepare_dataset(self, dataset, truncate_at):
+        logging.info("Tokenizing dataset...")
         dataset = dataset.map(
             lambda x: UDDataset.tokenize(
                 x, self.tokenizer, self.lang_offset, self.padding, self.max_length
             ),
             batched=True,
         )
-        dataset = dataset.map(lambda x: self.align_labels(x), batched=True)
+        logging.info("Aligning labels...")
+        dataset = dataset.map(
+            lambda x: UDDataset.align_labels(x, self.tokenizer, self.max_length),
+            batched=True,
+        )
+        logging.info("Generating arc prediction examples...")
         dataset = dataset.map(
             self.generate_arc_prediction_examples,
             batched=True,
             remove_columns=dataset.column_names,
-            num_proc=8,
+            num_proc=4,
         )
-        if self.truncate_at is not None:
-            dataset = dataset.shuffle(42).select(range(self.truncate_at))
+        if truncate_at is not None:
+            logging.info("Truncating dataset...")
+            dataset = dataset.shuffle(42).select(range(truncate_at))
         # dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
         return dataset
 
     @property
     def test(self) -> Dataset:
-        return self._prepare_dataset(self.dataset["test"])
+        return self._prepare_dataset(self.dataset["test"], self.max_test_samples)
 
     @property
     def train(self):
-        return self._prepare_dataset(self.dataset["train"])
+        return self._prepare_dataset(self.dataset["train"], self.max_train_samples)
 
     @property
     def validation(self):
-        return self._prepare_dataset(self.dataset["validation"])
+        return self._prepare_dataset(self.dataset["validation"], self.max_eval_samples)
