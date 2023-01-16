@@ -53,10 +53,10 @@ echo ${lang_tgt}
 
 # disable cuda
 # export CUDA_VISIBLE_DEVICES=""
-# python -m pdb src/finetune_xnli.py \
+# python -m pdb src/finetune_evaluate_xnli.py \
 
 # TODO: rename the script to run_xnli.py
-python src/finetune_xnli.py \
+python src/finetune_evaluate_xnli.py \
     --model_name_or_path ${model_path} --model_config_path ${model_config_path} --output_dir ${output_path} --language ${lang_tgt} \
     --max_seq_length 126 --per_device_eval_batch_size 4 --eval_accumulation_steps 4 --use_custom_xnli_head $custom_head --do_predict
 

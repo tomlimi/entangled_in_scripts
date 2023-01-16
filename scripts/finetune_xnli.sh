@@ -23,7 +23,7 @@ lang=$5
 seed=$6
 probe=$7
 custom_head=$8
-# rest of the parameters are passed to the finetune_xnli.py script
+# rest of the parameters are passed to the finetune_evaluate_xnli.py script
 additional=${@:9}
 
 in_seed=1234
@@ -58,11 +58,11 @@ echo $@
 
 # disable cuda
 # export CUDA_VISIBLE_DEVICES=""
-# python -m pdb src/finetune_xnli.py \
+# python -m pdb src/finetune_evaluate_xnli.py \
 
 export TOKENIZERS_PARALLELISM=false
 
-python src/finetune_xnli.py \
+python src/finetune_evaluate_xnli.py \
     --model_name_or_path ${model_path} --model_config_path ${model_config_path} --output_dir ${model_output_path} --seed ${seed} --train_language ${lang} --language ${lang} \
     --max_seq_length 126 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --save_strategy epoch --save_total_limit 1 \
     --dataloader_num_workers 32 --use_fast_tokenizer False --load_best_model_at_end --metric_for_best_model accuracy \
