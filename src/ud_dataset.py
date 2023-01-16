@@ -89,6 +89,7 @@ class UDDataset:
                 for _ in subword_tokens:
                     if first_subword:
                         labels.append(int(head) if head != "None" else -100)
+                        first_subword = False
                     else:
                         labels.append(-100)
             for i in range(len(labels)):
@@ -103,6 +104,7 @@ class UDDataset:
             # print(new_input_ids)
             print(input_ids)
             print(labels)
+            print()
             assert new_input_ids == input_ids
             examples_labels.append(labels)
 
@@ -120,6 +122,9 @@ class UDDataset:
             examples["input_ids"], examples["attention_mask"], examples["labels"]
         ):
             for src in range(1, len(labels) - 1):  # skip root and eos
+                # also skip subword tokens that are not the first subword
+                if labels[src] == -100:
+                    continue
                 for dst in range(len(labels) - 1):  # skip eos
                     if src != dst:
                         new_examples["input_ids"].append(input_ids)
@@ -131,7 +136,7 @@ class UDDataset:
 
     def _prepare_dataset(self, dataset):
         dataset = dataset.map(lambda x: self.tokenize(x), batched=True)
-        dataset = dataset.map(self.align_labels, batched=True)
+        dataset = dataset.map(lambda x: self.align_labels(x), batched=True)
         dataset = dataset.map(
             self.generate_arc_prediction_examples,
             batched=True,
