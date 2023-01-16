@@ -2,6 +2,7 @@ import torch
 from abc import abstractmethod
 from datasets import Dataset, load_dataset
 import transformers
+import random
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -123,7 +124,8 @@ class UDDataset:
 
         return {"labels": examples_labels}
 
-    def generate_arc_prediction_examples(self, examples):
+    @staticmethod
+    def generate_arc_prediction_examples(examples, subsample_negative):
         new_examples = {
             "input_ids": [],
             "attention_mask": [],
@@ -134,6 +136,8 @@ class UDDataset:
         for input_ids, attention_mask, labels in zip(
             examples["input_ids"], examples["attention_mask"], examples["labels"]
         ):
+            valid_heads = [i for i in range(len(labels)) if labels[i] != -100]
+
             for src in range(1, len(labels) - 1):  # skip root and eos
                 # skip padding / inner-tokens
                 if labels[src] == -100:
@@ -142,15 +146,25 @@ class UDDataset:
                     # skip padding / inner-tokens
                     if labels[dst] == -100:
                         continue
+
+                    label = int(labels[src] == dst)
+                    # balance positive and negative examples
+                    if label == 0 and subsample_negative:
+                        if random.random() > 1 / (len(valid_heads)):
+                            continue
                     if src != dst:
                         new_examples["input_ids"].append(input_ids)
                         new_examples["attention_mask"].append(attention_mask)
-                        new_examples["labels"].append(int(labels[src] == dst))
+                        new_examples["labels"].append(label)
                         new_examples["src"].append(src)
                         new_examples["dst"].append(dst)
+        logging.info(
+            "ratio of positive examples: %f",
+            sum(new_examples["labels"]) / len(new_examples["labels"]),
+        )
         return new_examples
 
-    def _prepare_dataset(self, dataset, truncate_at):
+    def _prepare_dataset(self, dataset, truncate_at, subsample_negative):
         logging.info("Tokenizing dataset...")
         dataset = dataset.map(
             lambda x: UDDataset.tokenize(
@@ -165,10 +179,9 @@ class UDDataset:
         )
         logging.info("Generating arc prediction examples...")
         dataset = dataset.map(
-            self.generate_arc_prediction_examples,
+            lambda x: UDDataset.generate_arc_prediction_examples(x, subsample_negative),
             batched=True,
             remove_columns=dataset.column_names,
-            num_proc=4,
         )
         if truncate_at is not None:
             logging.info("Truncating dataset...")
@@ -177,13 +190,19 @@ class UDDataset:
         return dataset
 
     @property
-    def test(self) -> Dataset:
-        return self._prepare_dataset(self.dataset["test"], self.max_test_samples)
-
-    @property
     def train(self):
-        return self._prepare_dataset(self.dataset["train"], self.max_train_samples)
+        return self._prepare_dataset(
+            self.dataset["train"], self.max_train_samples, subsample_negative=True
+        )
 
     @property
     def validation(self):
-        return self._prepare_dataset(self.dataset["validation"], self.max_eval_samples)
+        return self._prepare_dataset(
+            self.dataset["validation"], self.max_eval_samples, subsample_negative=False
+        )
+
+    @property
+    def test(self) -> Dataset:
+        return self._prepare_dataset(
+            self.dataset["test"], self.max_test_samples, subsample_negative=False
+        )
