@@ -13,6 +13,7 @@ import os, pickle
 from classification_dataset import XtremePOSClassificationDataset, XtremeNERClassificationDataset
 from utils import load_config
 
+logging.basicConfig(level=logging.INFO)
 
 def load_and_finetune(pretrain_in_path, ft_out_path, model_config, truncate_at, load_checkpoint, language, task='POS',
                       seed=10, eval_and_save_steps=1000,probe=True):
@@ -75,7 +76,7 @@ def load_and_finetune(pretrain_in_path, ft_out_path, model_config, truncate_at, 
         gradient_accumulation_steps=gradient_accumulation_steps,
         save_steps=eval_and_save_steps,
         eval_steps=eval_and_save_steps,
-        save_total_limit=3,
+        save_total_limit=1,
         report_to=['tensorboard'],
         evaluation_strategy=IntervalStrategy.STEPS,
         load_best_model_at_end=True,
@@ -133,8 +134,11 @@ def finetune(args):
     logging.info(f"pt in: {pt_in_path}")
     logging.info(f"ft out: {ft_output_path}")
 
-    load_and_finetune(pt_in_path, ft_output_path, model_config,  args.truncate_at, args.load_checkpoint, lang, task=task,
-                      seed=seed, eval_and_save_steps=args.eval_and_save_steps, probe=args.probe)
+    if os.path.exists(os.path.join(ft_output_path, 'config.json')):
+        logging.info(f"Finetuned model already exists at {ft_output_path}, skipping.")
+    else:
+        load_and_finetune(pt_in_path, ft_output_path, model_config,  args.truncate_at, args.load_checkpoint, lang, task=task,
+                          seed=seed, eval_and_save_steps=args.eval_and_save_steps, probe=args.probe)
 
 
 if __name__ == '__main__':
