@@ -7,6 +7,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 
 import torch
 from torch import nn
+import logging
 
 
 class XLMRobertaXNLIHead(nn.Module):
@@ -45,9 +46,13 @@ class XLMRobertaForXNLI(XLMRobertaPreTrainedModel):
         )
         # the format of features is (batch_size, seq_len, hidden_size)
         masked_features = outputs[0] * attention_mask.unsqueeze(-1)
-        masked_mean = torch.sum(masked_features, dim=1) / torch.sum(
+        num_tokens = torch.sum(
             attention_mask, dim=1, keepdim=True
         )
+        if torch.min(num_tokens) == 0:
+            logging.warning("Found a sequence with no tokens")
+            num_tokens = torch.max(num_tokens, torch.ones_like(num_tokens))
+        masked_mean = torch.sum(masked_features, dim=1) / num_tokens
 
         return masked_mean
 
@@ -85,10 +90,6 @@ class XLMRobertaForXNLI(XLMRobertaPreTrainedModel):
             # for each sequence we find the separator tokens
             is_sep = (input_ids == sep_token_id).type(torch.uint8)
             sep_indices = is_sep.argmax(dim=1)
-            # test using native python
-            # assert sep_indices.tolist() == [
-            #     i.tolist().index(sep_token_id) for i in input_ids
-            # ]
 
             sep_indices += 1  # add one to account for the separator token
             input_ids_a = torch.ones_like(input_ids)
@@ -103,15 +104,6 @@ class XLMRobertaForXNLI(XLMRobertaPreTrainedModel):
                 input_ids_b[i, : input_ids.shape[1] - j] = input_ids[i, j:]
                 input_ids_b[i, 0] = 0  # TODO: do not hardcode this
                 attention_mask_b[i, : input_ids.shape[1] - j] = attention_mask[i, j:]
-                # torch.set_printoptions(threshold=10000)
-                # print(f"input_ids[{i}]\n", input_ids[i])
-                # print(f"attention_mask[{i}]\n", attention_mask[i])
-                # print(f"input_ids_a[{i}]\n", input_ids_a[i])
-                # print(f"input_ids_b[{i}]\n", input_ids_b[i])
-                # print(f"attention_mask_a[{i}]\n", attention_mask_a[i])
-                # print(f"attention_mask_b[{i}]\n", attention_mask_b[i])
-                # print(f"input_ids_b.shape\n", input_ids_b.shape)
-                # print(f"attention_mask_b.shape\n", attention_mask_b.shape)
 
             premise_embedding = self.compute_sentence_embeddings(
                 input_ids_a, attention_mask_a
