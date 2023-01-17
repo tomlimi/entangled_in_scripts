@@ -141,12 +141,15 @@ def load_and_finetune(
     seed,
     eval_and_save_steps,
     probe,
+    do_train,
+    do_eval,
+    do_predict,
 ):
     set_seed(seed)
 
     logging.info("Loading tokenizer...")
     # get tokenizer:
-    tokenizer, lang_offset = get_tokenizer(model_config)
+    tokenizer, lang_offset = get_tokenizer(model_config, language)
     MASK_ID = tokenizer.mask_token_id
     logging.info("Mask token id: " + str(MASK_ID))
 
@@ -211,15 +214,16 @@ def load_and_finetune(
         overwrite_output_dir=True,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=64 // gradient_accumulation_steps,
-        per_device_eval_batch_size=32,
+        per_device_eval_batch_size=128,
         gradient_accumulation_steps=gradient_accumulation_steps,
         save_steps=eval_and_save_steps,
         eval_steps=eval_and_save_steps,
         dataloader_num_workers=4,
-        save_total_limit=2,
+        save_total_limit=1,
         report_to=["tensorboard"],
         evaluation_strategy=IntervalStrategy.STEPS,
         load_best_model_at_end=True,
+        metric_for_best_model="f1",
         learning_rate=2e-5,
         weight_decay=0.01,
     )
@@ -228,8 +232,8 @@ def load_and_finetune(
         model=model,
         args=training_args,
         data_collator=data_collator,
-        train_dataset=dataset.train,
-        eval_dataset=dataset.validation,
+        train_dataset=dataset.train if do_train else None,
+        eval_dataset=dataset.validation if do_eval else None,
         compute_metrics=compute_metrics,
         callbacks=[
             EarlyStoppingCallback(
@@ -238,30 +242,57 @@ def load_and_finetune(
         ],
     )
 
-    if load_checkpoint:
-        logging.info("loading finetuning checkpoint")
-        try:
-            trainer.train(resume_from_checkpoint=True)
-        except Exception as e:
-            logging.info("Failed loading checkpoint, regular training")
-            trainer.train()
-    else:
-        logging.info("Finetuning from scratch")
-        trainer.train()
+    if do_train:
+        logging.info("*** Train ***")
+        train_result = trainer.train()
 
-    trainer.save_model(ft_output_path)
-    logging.info(f"Done finetune. Finetuned model saved in: {ft_output_path} \n")
-    metrics = trainer.evaluate()
-    logging.info(metrics)
+        trainer.save_model(ft_output_path)
+        trainer.log_metrics("train", train_result.metrics)
+        trainer.save_metrics("train", train_result.metrics)
+        trainer.save_state()
 
-    with open(os.path.join(ft_output_path, "pretrain_eval.pickle"), "wb") as evalout:
-        pickle.dump(metrics, evalout, protocol=pickle.HIGHEST_PROTOCOL)
+        logging.info(f"Done finetune. Finetuned model saved in: {ft_output_path} \n")
 
-    with open(sys.argv[0], "r") as model_code, open(
-        os.path.join(ft_output_path, "pretrain_source_code.py"), "w"
-    ) as source_out:
-        code_lines = model_code.readlines()
-        source_out.writelines(code_lines)
+        with open(sys.argv[0], "r") as model_code, open(
+            os.path.join(ft_output_path, "pretrain_source_code.py"), "w"
+        ) as source_out:
+            code_lines = model_code.readlines()
+            source_out.writelines(code_lines)
+
+    # Evaluation
+    if do_eval:
+        logging.info("*** Evaluate ***")
+
+        metrics = trainer.evaluate()
+        trainer.log_metrics("eval", metrics)
+        trainer.save_metrics("eval", metrics)
+
+        with open(
+            os.path.join(ft_output_path, "pretrain_eval.pickle"), "wb"
+        ) as evalout:
+            pickle.dump(metrics, evalout, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # Prediction
+    if do_predict:
+        logging.info("*** Predict ***")
+        predictions, labels, metrics = trainer.predict(
+            dataset.test, metric_key_prefix="predict"
+        )
+        trainer.log_metrics("predict", metrics)
+        trainer.save_metrics("predict", metrics)
+
+        metric_name = "f1"
+        out_path = os.path.join(ft_output_path, metric_name + "_evaluation", language)
+        stats = os.path.join(out_path, f"{metric_name}_all.txt")
+        if os.path.exists(stats):
+            logging.warning(f"Stats already exist at {stats}.")
+
+        # saving the stats:
+        result = metrics[f"predict_{metric_name}"]
+
+        os.makedirs(out_path, exist_ok=True)
+        with open(os.path.join(out_path, f"{metric_name}_all.txt"), "w") as eval_out:
+            json.dump({f"eval_{metric_name}": result}, eval_out)
 
     logging.info("Done.")
 
@@ -282,6 +313,9 @@ def finetune(args):
         args.seed,
         args.eval_and_save_steps,
         args.probe,
+        args.do_train,
+        args.do_eval,
+        args.do_predict,
     )
 
 
@@ -296,6 +330,9 @@ if __name__ == "__main__":
     parser.add_argument("--max_test_samples", type=int, required=False, default=None)
     parser.add_argument("--load_checkpoint", action=argparse.BooleanOptionalAction)
     parser.add_argument("--probe", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--do_train", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--do_eval", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--do_predict", action=argparse.BooleanOptionalAction)
     parser.add_argument("--seed", type=int, required=False, default=10)
     parser.add_argument("--eval_and_save_steps", type=int, required=False, default=1000)
 

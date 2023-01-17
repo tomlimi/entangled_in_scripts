@@ -7,7 +7,7 @@ def load_config(config_path):
         return json.load(fp)
 
 
-def get_tokenizer(model_config):
+def get_tokenizer(model_config, language):
     if "tokenizer_lang" in model_config:
         language_list = model_config["tokenizer_lang"]
         lang_index = language_list.index(language)

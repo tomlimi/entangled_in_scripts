@@ -191,9 +191,15 @@ class UDDataset:
 
     @property
     def train(self):
-        return self._prepare_dataset(
+        train_dataset = self._prepare_dataset(
             self.dataset["train"], self.max_train_samples, subsample_negative=True
         )
+
+        # Log a few random samples from the training set:
+        for index in random.sample(range(len(train_dataset)), 3):
+            logging.info(f"Sample {index} of the training set: {train_dataset[index]}.")
+
+        return train_dataset
 
     @property
     def validation(self):
