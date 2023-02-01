@@ -2,7 +2,7 @@
 #SBATCH --mem=32g
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=5:00:00
+#SBATCH --time=10:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --constraint="gpuram24G|gpuram40G|gpuram48G"
 #SBATCH -p gpu-troja,gpu-ms
@@ -36,6 +36,12 @@ output_path="$PROJECT_DIR/models/UD_PROBE/${tok_type}-tokenization/"
 pt_input_path="$input_path/${name}_${seed_in}"
 ft_output_path="$output_path/${name}_${seed}/$lang"
 
+# if the file train_results.json exists in ft_output_path, then the model has already been trained
+if [ -f "$ft_output_path/train_results.json" ]; then
+    echo "model $ft_output_path already trained; skipping..."
+    exit 0;
+fi
+
 echo start...
 echo UD
 echo "tok_type $tok_type"
@@ -53,6 +59,7 @@ echo ""
 export TOKENIZERS_PARALLELISM=false
 
 # dry run: --max_train_samples 1280 --max_eval_samples 1280 --eval_and_save_steps 200
+    # --max_train_samples 1280 --max_eval_samples 1280 --eval_and_save_steps 200 \
 python src/finetune_ud.py \
     --pt_input_path $pt_input_path --ft_output_path $ft_output_path --model_config_path $model_config_path \
     --language $lang --seed $seed \

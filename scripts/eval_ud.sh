@@ -2,7 +2,7 @@
 #SBATCH --mem=32g
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=1:00:00
+#SBATCH --time=2:00:00
 #SBATCH --gres=gpu:1
 #SBATCH -p gpu-troja,gpu-ms
 #SBATCH --mail-type=FAIL,TIME_LIMIT
@@ -32,6 +32,11 @@ name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
 output_path="$PROJECT_DIR/models/UD_PROBE/${tok_type}-tokenization/"
 
 ft_output_path="$output_path/${name}_${seed}/$lang_src"
+
+if [ -f "$ft_output_path/accuracy_evaluation/$lang_tgt/accuracy_all.txt" ]; then
+    echo "model $ft_output_path already evaluated on $lang_tgt; skipping..."
+    exit 0;
+fi
 
 echo start...
 echo UD

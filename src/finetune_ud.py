@@ -194,6 +194,7 @@ def load_and_finetune(
     os.makedirs(ft_output_path, exist_ok=True)
 
     # Get the metric function
+    accuracy_metric = evaluate.load("accuracy")
     f1_metric = evaluate.load("f1")
     recall_metric = evaluate.load("recall")
     precision_metric = evaluate.load("precision")
@@ -203,10 +204,17 @@ def load_and_finetune(
     def compute_metrics(p: EvalPrediction):
         preds = p.predictions[0] if isinstance(p.predictions, tuple) else p.predictions
         preds = np.argmax(preds, axis=1)
-        f1 = f1_metric.compute(predictions=preds, references=p.label_ids)
-        recall = recall_metric.compute(predictions=preds, references=p.label_ids)
-        precision = precision_metric.compute(predictions=preds, references=p.label_ids)
-        return {**f1, **recall, **precision}
+        accuracy = accuracy_metric.compute(predictions=preds, references=p.label_ids)
+        f1 = f1_metric.compute(
+            predictions=preds, references=p.label_ids, average="macro"
+        )
+        recall = recall_metric.compute(
+            predictions=preds, references=p.label_ids, average="macro"
+        )
+        precision = precision_metric.compute(
+            predictions=preds, references=p.label_ids, average="macro"
+        )
+        return {**accuracy, **f1, **recall, **precision}
 
     gradient_accumulation_steps = 1
     training_args = TrainingArguments(
@@ -281,18 +289,21 @@ def load_and_finetune(
         trainer.log_metrics("predict", metrics)
         trainer.save_metrics("predict", metrics)
 
-        metric_name = "f1"
-        out_path = os.path.join(ft_output_path, metric_name + "_evaluation", language)
-        stats = os.path.join(out_path, f"{metric_name}_all.txt")
-        if os.path.exists(stats):
-            logging.warning(f"Stats already exist at {stats}.")
+        # metric_name = "f1"
+        for metric_name in ["accuracy", "f1", "recall", "precision"]:
+            out_path = os.path.join(
+                ft_output_path, metric_name + "_evaluation", language
+            )
+            stats_path = os.path.join(out_path, f"{metric_name}_all.txt")
+            if os.path.exists(stats_path):
+                logging.warning(f"stats_path already exist at {stats_path}.")
 
-        # saving the stats:
-        result = metrics[f"predict_{metric_name}"]
+            # saving the stats:
+            result = metrics[f"predict_{metric_name}"]
 
-        os.makedirs(out_path, exist_ok=True)
-        with open(os.path.join(out_path, f"{metric_name}_all.txt"), "w") as eval_out:
-            json.dump({f"eval_{metric_name}": result}, eval_out)
+            os.makedirs(out_path, exist_ok=True)
+            with open(stats_path, "w") as eval_out:
+                json.dump({f"eval_{metric_name}": result}, eval_out)
 
     logging.info("Done.")
 

@@ -31,7 +31,49 @@ class UDDataset:
         "fr": "fr_ftb",
         "de": "de_hdt",
     }
-    NUM_LABELS = 2
+    deprel_id = [
+        "punct",
+        "case",
+        "det",
+        "nmod",
+        "nsubj",
+        "obl",
+        "amod",
+        "advmod",
+        "obj",
+        "root",
+        "cc",
+        "conj",
+        "mark",
+        "aux",
+        "nummod",
+        "compound",
+        "flat",
+        "xcomp",
+        "fixed",
+        "acl",
+        "ccomp",
+        "appos",
+        "advcl",
+        "cop",
+        "iobj",
+        "parataxis",
+        "csubj",
+        "dep",
+        "expl",
+        "discourse",
+        "clf",
+        "orphan",
+        "list",
+        "dislocated",
+        "vocative",
+        "goeswith",
+        "reparandum",
+    ]
+    deprel_id = {k: i for i, k in enumerate(deprel_id)}
+    print(deprel_id)
+
+    NUM_LABELS = len(deprel_id)
 
     def __init__(
         self,
@@ -53,6 +95,11 @@ class UDDataset:
         self.max_test_samples = max_test_samples
 
         config = self.lang_to_config[language]
+        # limit the number of training samples for russian and german languages
+        if config == "ru_syntagrus" or config == "de_hdt":
+            logging.info("Limiting the number of training samples to 15000")
+            self.max_train_samples = 15000
+
         if config is None:
             raise ValueError("Language not supported")
         self.dataset = load_dataset("universal_dependencies", config)
@@ -77,55 +124,67 @@ class UDDataset:
 
     @staticmethod
     def align_labels(examples, tokenizer, max_length):
-        examples_labels = []
-        for text, words, heads, input_ids in zip(
+        all_new_heads = []
+        all_new_deprels = []
+        for text, words, heads, deprels, input_ids in zip(
             examples["text"],
             examples["tokens"],
             examples["head"],
+            examples["deprel"],
             examples["input_ids"],
         ):
             assert len(words) == len(heads)
-            # new_input_ids = [0]
-            labels = []
-            labels.append(-100)
-            token_index_mapping = [0]
-            for i, (word, head) in enumerate(zip(words, heads)):
+            assert len(words) == len(deprels)
+
+            # create the mapping from word index to first subword index
+            token_index_mapping = [0]  # root token at the beginning
+            current_index = 1
+            for i, word in enumerate(words):
                 subword_tokens = tokenizer.encode(word, add_special_tokens=False)
-                token_index_mapping.append(len(labels))
-                # new_input_ids.extend(subword_tokens)
-                first_subword = True
-                for _ in subword_tokens:
-                    if first_subword:
-                        labels.append(int(head) if head != "None" else -100)
-                        first_subword = False
-                    else:
-                        labels.append(-100)
-            # renumber labels to the first subwords
-            for i in range(len(labels)):
-                if labels[i] != -100:
-                    labels[i] = token_index_mapping[labels[i]]
-                    # skip labels that are out of range
-                    if labels[i] >= max_length - 1:
-                        labels[i] = -100
-            labels = labels[: max_length - 1]  # truncating labels
-            labels.append(-100)
-            # pad labels
-            # while len(labels) < self.max_length - 1:
-            #     labels.append(-100)
+                token_index_mapping.append(current_index)
+                current_index += len(subword_tokens)
 
-            # new_input_ids = new_input_ids[: self.max_length - 1]  # truncating input_ids
-            # new_input_ids.append(2)
-            # print(new_input_ids, input_ids)
-            # assert new_input_ids == input_ids
+            assert len(token_index_mapping) == len(words) + 1  # +1 for the root token
 
-            for label in labels:
-                assert label >= -100 and label < len(input_ids)
-            examples_labels.append(labels)
+            # create the new labels
+            new_heads = [-100] * len(input_ids)
+            new_deprels = [-100] * len(input_ids)
+            for subword_index, head, deprel in zip(
+                token_index_mapping[1:], heads, deprels
+            ):
+                # skip labels that are out of range (-1 for the end of sentence token)
+                if subword_index >= max_length - 1:
+                    continue
+                # 1. handle heads
+                head = int(head) if head != "None" else -100
+                #   map the destination of the arc
+                if head != -100:
+                    head = token_index_mapping[head]
+                #   check if the label is in range
+                if head < max_length - 1:
+                    new_heads[subword_index] = head
+                # 2. handle deprels
+                if ":" in deprel:
+                    deprel = deprel.split(":")[0]
+                deprel = (
+                    UDDataset.deprel_id[deprel]
+                    if deprel in UDDataset.deprel_id
+                    else -100
+                )
+                new_deprels[subword_index] = deprel
 
-        return {"labels": examples_labels}
+            assert len(new_heads) == len(input_ids)
+            assert len(new_deprels) == len(input_ids)
+
+            for head in new_heads:
+                assert head >= -100 and head < len(input_ids)
+            all_new_heads.append(new_heads)
+            all_new_deprels.append(new_deprels)
+
+        return {"head": all_new_heads, "deprel": all_new_deprels}
 
     @staticmethod
-    def generate_arc_prediction_examples(examples, subsample_negative):
+    def generate_arc_prediction_examples(examples):
         new_examples = {
             "input_ids": [],
             "attention_mask": [],
@@ -133,38 +192,27 @@ class UDDataset:
             "src": [],
             "dst": [],
         }
-        for input_ids, attention_mask, labels in zip(
-            examples["input_ids"], examples["attention_mask"], examples["labels"]
+        for input_ids, attention_mask, heads, deprels in zip(
+            examples["input_ids"],
+            examples["attention_mask"],
+            examples["head"],
+            examples["deprel"],
         ):
-            valid_heads = [i for i in range(len(labels)) if labels[i] != -100]
-
-            for src in range(1, len(labels) - 1):  # skip root and eos
-                # skip padding / inner-tokens
-                if labels[src] == -100:
+            n = len(input_ids)
+            for dst in range(n):
+                head = heads[dst]
+                deprel = deprels[dst]
+                if head == -100 or deprel == -100:
                     continue
-                for dst in range(len(labels) - 1):  # skip eos
-                    # skip padding / inner-tokens
-                    if labels[dst] == -100:
-                        continue
-
-                    label = int(labels[src] == dst)
-                    # balance positive and negative examples
-                    if label == 0 and subsample_negative:
-                        if random.random() > 1 / (len(valid_heads)):
-                            continue
-                    if src != dst:
-                        new_examples["input_ids"].append(input_ids)
-                        new_examples["attention_mask"].append(attention_mask)
-                        new_examples["labels"].append(label)
-                        new_examples["src"].append(src)
-                        new_examples["dst"].append(dst)
-        logging.info(
-            "ratio of positive examples: %f",
-            sum(new_examples["labels"]) / len(new_examples["labels"]),
-        )
+                new_examples["input_ids"].append(input_ids)
+                new_examples["attention_mask"].append(attention_mask)
+                new_examples["labels"].append(deprel)
+                new_examples["src"].append(head)
+                new_examples["dst"].append(dst)
         return new_examples
 
-    def _prepare_dataset(self, dataset, truncate_at, subsample_negative):
+    def _prepare_dataset(self, dataset, truncate_at):
+        load_from_cache_file = True
         logging.info("Tokenizing dataset...")
         dataset = dataset.map(
             lambda x: UDDataset.tokenize(
@@ -176,15 +224,18 @@ class UDDataset:
         dataset = dataset.map(
             lambda x: UDDataset.align_labels(x, self.tokenizer, self.max_length),
             batched=True,
+            load_from_cache_file=load_from_cache_file,
         )
         logging.info("Generating arc prediction examples...")
         dataset = dataset.map(
-            lambda x: UDDataset.generate_arc_prediction_examples(x, subsample_negative),
+            lambda x: UDDataset.generate_arc_prediction_examples(x),
             batched=True,
             remove_columns=dataset.column_names,
+            load_from_cache_file=load_from_cache_file,
         )
         if truncate_at is not None:
             logging.info("Truncating dataset...")
+            truncate_at = min(truncate_at, len(dataset))
             dataset = dataset.shuffle(42).select(range(truncate_at))
         # dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
         return dataset
@@ -192,7 +243,7 @@ class UDDataset:
     @property
     def train(self):
         train_dataset = self._prepare_dataset(
-            self.dataset["train"], self.max_train_samples, subsample_negative=True
+            self.dataset["train"], self.max_train_samples
         )
 
         # Log a few random samples from the training set:
@@ -203,12 +254,8 @@ class UDDataset:
 
     @property
     def validation(self):
-        return self._prepare_dataset(
-            self.dataset["validation"], self.max_eval_samples, subsample_negative=False
-        )
+        return self._prepare_dataset(self.dataset["validation"], self.max_eval_samples)
 
     @property
     def test(self) -> Dataset:
-        return self._prepare_dataset(
-            self.dataset["test"], self.max_test_samples, subsample_negative=False
-        )
+        return self._prepare_dataset(self.dataset["test"], self.max_test_samples)
