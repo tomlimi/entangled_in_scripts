@@ -324,16 +324,64 @@ def get_distribution_over_vocabulary(tok_type: str, alpha: float, NV: int, langu
             frequencies_over_vocabulary['All'] = json.load(open(tokenizer_stats_path, 'r'))
         except FileNotFoundError:
             print(f"Multilingual freq file not found ({tokenizer_stats_path}).")
-        
+    
     distribution_over_vocabulary = dict()
     for lang, freqs in frequencies_over_vocabulary.items():
-        freqs = OrderedDict([(str(tok), freqs[str(tok)]) for tok in range(NV)])
+        actual_NV = len(freqs)
+        freqs = OrderedDict([(str(tok), freqs[str(tok)]) for tok in range(actual_NV)])
         distribution_over_vocabulary[lang] = distribution_from_frequencies(freqs)
         frequencies_over_vocabulary[lang] = freqs
     
     return distribution_over_vocabulary, frequencies_over_vocabulary
-        
+    
 
+def get_distribution_over_decoded_vocabulary(tok_type: str, alpha: float, NV: int, languages: list[str]) -> (dict, dict):
+    
+    tok_type_map = {'multilingual': 'sp-unigram',
+                    '20l-multilingual': 'sp-unigram',
+                    'merged': 'sp-unigram-merged',
+                    '20l-merged': 'sp-unigram-merged',
+                    'nooverlap': 'sp-unigram',
+                    'bpe': 'sp-bpe',
+                    '20l-bpe': 'sp-bpe',
+                    'bpe_nooverlap': 'sp-bpe'}
+    
+    frequencies_over_vocabulary = dict()
+    
+    # monolingual frequencies
+    for lang in languages:
+        if "nooverlap" in tok_type:
+            tokenizer_stats_path = os.path.join(TOKENIZERS_DIR, tok_type_map[tok_type], lang,
+                                                f"alpha-{alpha}_N-{NV//len(languages)}",
+                                                f"token_freq_{lang}_{alpha}_decoded.json")
+        else:
+            tokenizer_stats_path = os.path.join(TOKENIZERS_DIR, tok_type_map[tok_type], '-'.join(languages),
+                                                f"alpha-{alpha}_N-{NV}", f"token_freq_{lang}_{alpha}_decoded.json")
+        try:
+            frequencies_over_vocabulary[lang] = json.load(open(tokenizer_stats_path, 'r'))
+        except FileNotFoundError:
+            print(f"{lang} freq file not found ({tokenizer_stats_path}).")
+            continue
+
+    # multilingual frequency file
+    if "nooverlap" not in tok_type:
+        
+        tokenizer_stats_path = os.path.join(TOKENIZERS_DIR, tok_type_map[tok_type], '-'.join(languages),
+                                            f"alpha-{alpha}_N-{NV}", f"token_frequencies_decoded.json")
+        try:
+            frequencies_over_vocabulary['All'] = json.load(open(tokenizer_stats_path, 'r'))
+        except FileNotFoundError:
+            print(f"Multilingual freq file not found ({tokenizer_stats_path}).")
+
+    distribution_over_vocabulary = dict()
+    for lang, freqs in frequencies_over_vocabulary.items():
+        freqs = OrderedDict([(tok, freq) for tok, freq in sorted(freqs.items(), key=lambda item: item[0])])
+        distribution_over_vocabulary[lang] = distribution_from_frequencies(freqs)
+        frequencies_over_vocabulary[lang] = freqs
+
+    return distribution_over_vocabulary, frequencies_over_vocabulary
+    
+    
 def get_mlm_results(tok_type: str, alpha: float, NV: int, languages: list[str],
                     seed=1234, alpha_train=0.25, metrics=('mrr', 'bpc')) -> dict:
     """
