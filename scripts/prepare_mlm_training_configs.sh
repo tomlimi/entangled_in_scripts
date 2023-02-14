@@ -7,10 +7,13 @@ function join_by {
   fi
 }
 
-alpha_id=$1
-alpha_id_train=$2
-vocab_size=$3
-langs=${@:4:1000}
+vocab_size=$1
+alpha_id=$2
+alpha_id_train=$3
+type=$4
+data_path=$5
+root_path=$6
+langs=${@:7:1000}
 
 alphas=("0.0" "0.25" "0.5" "0.75" "1.0")
 
@@ -18,9 +21,8 @@ alpha=${alphas[@]:$alpha_id:1}
 alpha_train=${alphas[@]:$alpha_id_train:1}
 
 lang_string=$(join_by "-" ${langs[@]})
-output_path="/lnet/work/people/limisiewicz/entangled-in-scripts/models/config/multilingual-tokenization"
-tokenizer_path="/lnet/work/people/limisiewicz/entangled-in-scripts/tokenizers/sp-unigram/${lang_string}/alpha-${alpha}_N-${vocab_size}"
-data_path="/lnet/express/work/people/limisiewicz/cc100"
+output_path="${root_path}/models/config/multilingual-tokenization"
+tokenizer_path="${root_path}/tokenizers/${type}/${lang_string}/alpha-${alpha}_N-${vocab_size}"
 seed=1234
 
 #saving model config
@@ -77,6 +79,6 @@ arr_eval="$(sed -e 's/\ *$//g'<<<"${arr_eval}")"
 struct_train_config > "${output_path}/train_config_alpha-${alpha_train}.json"
 echo "Saved: ${output_path}/${lang}/train_config_alpha-${alpha_train}.json"
 
-#source prepare_mlm_training_configs.sh 1 1 120000 ar tr zh el es en
+#source prepare_mlm_training_configs.sh 1 1 120000 sp-unigram ../.. ../../data/cc100 ar tr zh el es en
 
 

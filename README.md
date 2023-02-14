@@ -89,16 +89,41 @@ dev, test are development and test sets for each language.
 
 To train tokenizer run:
 ```
-source train_tokenizer.sh <vocab_size> <alpha_idx> <type> <langugage_list>
+source train_tokenizer.sh <vocab_size> <alpha_idx> <tokenizer_type> <path_to_data_dir> <output_path> <langugage_list>
 ```
 
 <vocab_size> is the size of the vocabulary for the tokenizer.
+
 <alpha_idx> is the index of the alpha parameter in the list [0.0, 0.25, 0.5, 0.75, 1.0] defining how many files should be accumulated per language.
-<type> currently supporteted types of the tokenizer are bpe, unigram, sp-bpe, sp-unigram (where sp stands for SentencePiece method).
+
+<tokenizer_type> currently supporteted types of the tokenizer are bpe, unigram, sp-bpe, sp-unigram (where sp stands for SentencePiece method).
+
+<path_to_data_dir> is the path to the directory with data, same as above.
+
+<output_path> is the path to the directory where the tokenizer will be saved.
+
+<langugage_list> is the list of langauges' iso codes (e.g. en es pl).
 
 
 ### Training LMs
-TODO: fill in
+Before training the LM, it's necessary to prepare training configuration files:
+
+```
+source prepare_mlm_training_config.sh <vocab_size> <alpha_idx> <alpha_idx_train> <path_to_data_dir> <output_path> <langugage_list>
+```
+
+<alpha_idx_train> is choice og alpha parameter for training LM (note it can be different than <alpha_idx> for tokenizer training).
+
+<output_path> is the path to the directory with subdirectories: /tokenizes and /models. All experimental outputs will
+be saved in those subdirectories.
+
+Other parameters are the same as above.
+
+Now, you can train the LM with the following command, with the same parameters:
+
+```
+source pretrtain_mlm.sh <vocab_size> <alpha_idx> <alpha_idx_train> <tokenizer_type> <path_to_data_dir> <output_path> <langugage_list>
+```
 
 ### Fine tuning models on downstream tasks
 TODO: fill in
