@@ -2,26 +2,27 @@
 #SBATCH --mem=32g
 #SBATCH -N 1
 #SBATCH --cpus-per-task=2
-#SBATCH --time=59:00
+#SBATCH --time=3:00:00
 #SBATCH --output=/home/limisiewicz/my-luster/entangled-in-scripts/job_outputs/ALIGN/eval_%j.out
 
-cd /home/limisiewicz/my-luster/entangled-in-scripts/entangled_in_scripts || exit 1;
-source /home/limisiewicz/my-luster/entangled-in-scripts/eis/bin/activate
+cd .. || exit 1;
+source ../../eis/bin/activate
 
-alpha=$1
-train_alpha=$2
-vocab_size=$3
+vocab_size=$1
+alpha=$2
+train_alpha=$3
 lang_src=$4
 lang_tgt=$5
 tok_type=$6
+root_path=$7
 
-input_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/LM/${tok_type}-tokenization"
-model_config="/home/limisiewicz/my-luster/entangled-in-scripts/models/config/${tok_type}-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
+input_path="${root_path}/models/LM/${tok_type}-tokenization"
+model_config="${root_path}/models/config/${tok_type}-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
 name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
 
 #name="${name}_probe"
 
-output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/ALIGN/${tok_type}-tokenization/"
+output_path="${root_path}/models/ALIGN/${tok_type}-tokenization/"
 
 
 echo start...
@@ -36,3 +37,5 @@ python src/eval_alignment.py -o ${output_path} -i ${input_path} -p ${name} -s ${
 chmod -R 770 $output_path || exit 0;
 
 echo end
+
+# sbatch eval_alignment.sh 120000 0.25 0.25 ar en sp-unigram ../..

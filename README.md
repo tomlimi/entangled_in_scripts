@@ -108,7 +108,7 @@ source train_tokenizer.sh <vocab_size> <alpha_idx> <tokenizer_type> <path_to_dat
 ### Training LMs
 Before training the LM, it's necessary to prepare training configuration files:
 
-```
+```commandline
 source prepare_mlm_training_config.sh <vocab_size> <alpha_idx> <alpha_idx_train> <path_to_data_dir> <output_path> <langugage_list>
 ```
 
@@ -121,12 +121,35 @@ Other parameters are the same as above.
 
 Now, you can train the LM with the following command, with the same parameters:
 
-```
+```commandline
 source pretrtain_mlm.sh <vocab_size> <alpha_idx> <alpha_idx_train> <tokenizer_type> <path_to_data_dir> <output_path> <langugage_list>
 ```
 
 ### Fine tuning models on downstream tasks
-TODO: fill in
+
+To fine-tune the models on downstream task run (for example for NER task):
+
+```commandline
+source fine_tune_ner.sh <vocab_size> <alpha_> <alpha_train> <language_code> <tokenizer_type> <r_seed> <do_probe> <output_path>
+```
+
+New parameters are:
+
+<alpha_> and <alpha_train> are now numerical values instead of indices.
+
+<language_code> is the iso code language of the downstream task (e.g. en es pl).
+
+<r_seed> is the seed for the random initialization of the probe.
+
+<do_probe> 0 or 1: whether to use probing setting (i.e. freezeing the underlying LM's parameteres).
+
+Subsequently, you can evaluate the fine-tuned model on test data in the same or different language.
+
+```commandline
+source eval_ner.sh <vocab_size> <alpha> <alpha_train> <language_src> <language_tgt> <tokenizer_type> <r_seed> <do_probe> <output_path>
+```
+where <language_src> is the language of the fine-tuned model and <language_tgt> is the language of the test data.
+
 
 ## Bibtex
 TODO: provide bibtex key.
