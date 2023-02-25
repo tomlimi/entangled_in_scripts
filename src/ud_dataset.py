@@ -22,11 +22,9 @@ class UDDataset:
         "ur": "ur_udtb",
         "ta": "ta_ttb",
         "te": "te_mtg",
-        "th": None,
         "ru": "ru_syntagrus",
         "bg": "bg_btb",
         "he": "he_htb",
-        "ka": None,
         "vi": "vi_vtb",
         "fr": "fr_ftb",
         "de": "de_hdt",
@@ -94,7 +92,7 @@ class UDDataset:
         self.max_eval_samples = max_eval_samples
         self.max_test_samples = max_test_samples
 
-        config = self.lang_to_config[language]
+        config = self.lang_to_config.get(language, None)
         # limit the number of training samples for russian and german languages
         if config == "ru_syntagrus" or config == "de_hdt":
             logging.info("Limiting the number of training samples to 15000")

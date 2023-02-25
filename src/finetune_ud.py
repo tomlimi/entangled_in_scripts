@@ -17,7 +17,7 @@ import sys
 import os, pickle
 
 from ud_dataset import UDDataset
-from utils import load_config, get_tokenizer
+from utils import load_config, get_tokenizer_from_model_config
 
 from typing import Optional, Union, Tuple
 from transformers import (
@@ -149,7 +149,7 @@ def load_and_finetune(
 
     logging.info("Loading tokenizer...")
     # get tokenizer:
-    tokenizer, lang_offset = get_tokenizer(model_config, language)
+    tokenizer, lang_offset = get_tokenizer_from_model_config(model_config, language)
     MASK_ID = tokenizer.mask_token_id
     logging.info("Mask token id: " + str(MASK_ID))
 
