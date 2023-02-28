@@ -1,29 +1,28 @@
 #!/bin/bash
-#SBATCH --mem=128g
+#SBATCH --mem=64g
 #SBATCH -N 1
-#SBATCH --cpus-per-task=2
-#SBATCH --time=6-23
+#SBATCH --cpus-per-task=6
+#SBATCH --time=13-23
 #SBATCH -p gpu-troja,gpu-ms
 #SBATCH --constraint="gpuram40G|gpuram48G"
-#SBATCH --gres=gpu:2
-#SBATCH --mail-type=END,FAIL,TIME_LIMIT
-#SBATCH --mail-user=limisiewicz@ufal.mff.cuni.cz
-#SBATCH --output=/home/limisiewicz/my-luster/entangled-in-scripts/job_outputs/pretrain_model_%j.out
+#SBATCH --gres=gpu:3
 
 
-alpha=$1
-alpha_train=$2
-vocab_size=$3
+vocab_size=$1
+alpha=$2
+alpha_train=$3
 tok_type=$4
-langs=${@:5:1000}
+data_path=$5
+output_path=$6
+langs=${@:7:1000}
 es_patience=20
 
 cd /home/limisiewicz/my-luster/entangled-in-scripts/entangled_in_scripts/src || exit 1;
 source /home/limisiewicz/my-luster/entangled-in-scripts/eis/bin/activate
+export LD_LIBRARY_PATH=/home/limisiewicz/.virtualenvs/eis/lib/python3.10/site-packages/nvidia/cublas/lib/:$LD_LIBRARY_PATH
 
-
-output_path="/lnet/work/people/limisiewicz/entangled-in-scripts/models/LM/${tok_type}-tokenization"
-config_path="/lnet/work/people/limisiewicz/entangled-in-scripts/models/config/${tok_type}-tokenization"
+output_path="${output_path}/models/LM/${tok_type}-tokenization"
+config_path="${output_path}/models/config/${tok_type}-tokenization"
 data_path="/lnet/express/work/people/limisiewicz/cc100"
 
 seed=1234
@@ -50,4 +49,4 @@ done
 
 chmod -R 777 $output_path || exit 0;
 
-#sbatch pretrain_model.sh 0.25 0.25 140000 ar tr zh el es en
+#sbatch pretrain_model.sh 0.25 0.25 120000 ../.. ../../data/cc100 ar tr zh el es en

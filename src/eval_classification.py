@@ -58,7 +58,7 @@ def eval(args):
     tgt_lang = args.language_tgt
     model_config_path = args.model_config_path
     truncate_at = args.truncate_at
-    overrite = args.overrite
+    overwrite = args.overwrite
     seed = args.seed
     metric_name = args.metric
     task = args.ft_task
@@ -68,8 +68,8 @@ def eval(args):
     model_config = json.load(open(model_config_path, 'r'))
 
     logging.info(f"Output is: {out_path}")
-    if os.path.exists(os.path.join(out_path,f'{metric_name}_all.txt')) and not overrite:
-        logging.info(f"stats already exist at {os.path.join(out_path,f'{metric_name}_all.txt')}, no overrite. finishing.")
+    if os.path.exists(os.path.join(out_path,f'{metric_name}_all.txt')) and not overwrite:
+        logging.info(f"stats already exist at {os.path.join(out_path,f'{metric_name}_all.txt')}, no overwrite. finishing.")
         return
 
     logging.info(f"Loading tokenizer")
@@ -99,7 +99,7 @@ def eval(args):
     logging.info(f"#params:, {model.num_parameters()}")
 
     logging.info("Gathering stats...")
-    logging.info(f"Evaulating {task} in {tgt_lang} finetuned: {src_lang} with truncate {truncate_at}. Overrite:{overrite}.")
+    logging.info(f"Evaulating {task} in {tgt_lang} finetuned: {src_lang} with truncate {truncate_at}. Overw:q:rite:{overwrite}.")
     # gathering scores:
 
     result = evaluate_metric(dataset.test, model, data_collator, metric_name, task=task)
@@ -111,7 +111,7 @@ def eval(args):
     with open(os.path.join(out_path,f'{metric_name}_all.txt'), 'w') as eval_out:
         json.dump({f'eval_{metric_name}': result}, eval_out)
     with open(os.path.join(out_path,f'script_args.txt'), 'w') as script_args:
-        json.dump({'args':str(vars(args)),'note':'overrite is manually always True.'}, script_args)
+        json.dump({'args':str(vars(args)),'note':'overwrite is manually always True.'}, script_args)
 
 
 if __name__ == '__main__':

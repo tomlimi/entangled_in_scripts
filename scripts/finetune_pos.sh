@@ -1,36 +1,35 @@
 #!/bin/bash
-#SBATCH --mem=8g
-#SBATCH -c2
-#SBATCH --time=59:00
+#SBATCH --mem=32g
+#SBATCH -N 1
+#SBATCH --cpus-per-task=2
+#SBATCH --time=23:59:00
 #SBATCH --constraint="gpuram24G|gpuram40G|gpuram48G"
 #SBATCH --gres=gpu:1
-#SBATCH -p gpu-troja,gpu-ms
-#SBATCH --output=/home/limisiewicz/my-luster/entangled-in-scripts/job_outputs/POS/ft_%j.out
 
-cd /home/limisiewicz/my-luster/entangled-in-scripts/entangled_in_scripts || exit 1;
-source /home/limisiewicz/my-luster/entangled-in-scripts/eis/bin/activate
+cd ../entangled_in_scripts || exit 1;
+# source ../../eis/bin/activate
 
 
-
-alpha=$1
-train_alpha=$2
-vocab_size=$3
+vocab_size=$1
+alpha=$2
+train_alpha=$3
 lang=$4
 tok_type=$5
 seed=$6
 probe=$7
+root_path=$8
 
 
-input_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/LM/${tok_type}-tokenization"
-model_config="/home/limisiewicz/my-luster/entangled-in-scripts/models/config/$tok_type-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
+input_path="${root_path}/models/LM/${tok_type}-tokenization"
+model_config="${root_path}/models/config/$tok_type-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
 name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
 
 #name="${name}_probe"
 
 if [ "$probe" = 1 ]; then
-    output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/POS_PROBE/${tok_type}-tokenization/"
+    output_path="${root_path}/models/POS_PROBE/${tok_type}-tokenization/"
 else
-    output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/POS_FT/${tok_type}-tokenization/"
+    output_path="${root_path}/models/POS_FT/${tok_type}-tokenization/"
 fi
 
 
@@ -53,3 +52,5 @@ fi
 chmod -R 770 $output_path || exit 0;
 
 echo end
+
+# sbatch finetune_pos.sh 0.25 0.25 120000 ar sp-unigram 1234 0 ../..

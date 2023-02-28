@@ -8,8 +8,8 @@
 #SBATCH -p gpu-troja,gpu-ms
 #SBATCH --output=/home/limisiewicz/my-luster/entangled-in-scripts/job_outputs/POS/eval_%j.out
 
-cd /home/limisiewicz/my-luster/entangled-in-scripts/entangled_in_scripts || exit 1;
-source /home/limisiewicz/my-luster/entangled-in-scripts/eis/bin/activate
+cd .. || exit 1;
+source ../../eis/bin/activate
 
 alpha=$1
 train_alpha=$2
@@ -19,17 +19,18 @@ lang_tgt=$5
 tok_type=$6
 seed=$7
 probe=$8
+root_path=$9
 
 
-model_config="/home/limisiewicz/my-luster/entangled-in-scripts/models/config/${tok_type}-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
+model_config="${root_path}/models/config/${tok_type}-tokenization/model_alpha-${alpha}_N-${vocab_size}.json"
 name="alpha-${alpha}_alpha-train-${train_alpha}_N-${vocab_size}"
 
 #name="${name}_probe"
 
 if [ "$probe" = 1 ]; then
-    output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/POS_PROBE/${tok_type}-tokenization/"
+    output_path="${root_path}/models/POS_PROBE/${tok_type}-tokenization/"
 else
-    output_path="/home/limisiewicz/my-luster/entangled-in-scripts/models/POS_FT/${tok_type}-tokenization/"
+    output_path="${root_path}/models/POS_FT/${tok_type}-tokenization/"
 fi
 
 #name="${pt_type}_${vocab}_depth_${depth}"
@@ -48,3 +49,5 @@ python src/eval_classification.py -o ${output_path} -p ${name} -s ${lang_src} -t
 chmod -R 770 $output_path || exit 0;
 
 echo end
+
+# sbatch eval_pos.sh 0.25 0.25 120000 ar en sp-unigram 1234 0 ../..

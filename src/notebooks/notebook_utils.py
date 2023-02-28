@@ -6,6 +6,7 @@ import csv
 from transformers import XLMRobertaTokenizerFast
 import logging
 import pandas as pd
+from collections import OrderedDict
 
 TOKENIZERS_DIR = "/home/limisiewicz/my-luster/entangled-in-scripts/tokenizers"
 MODELS_DIR = "/home/limisiewicz/my-luster/entangled-in-scripts/models"
@@ -269,19 +270,14 @@ def merge_vocabularies_with_logits(token_logit_list, NV):
     return merged_vocabulary
 
 
-def distribution_from_frequencies(stats, NV):
-    dist = np.zeros(NV)
-    assert len(stats) == NV
-    for token, freq in stats.items():
-        dist[int(token)] = freq
-    dist /= dist.sum()
-    return dist
+def distribution_from_frequencies(frequencies: dict) -> OrderedDict:
+
+    sum_freq = np.sum(list(frequencies.values()))
+    distribution = OrderedDict([(tok, freq / sum_freq) for tok, freq in frequencies.items()])
+    return distribution
 
 
-def get_distribution_over_vocabulary(tok_type, alpha, NV, languages):
-    """
-    tok_type: 'mono' or 'multi'
-    """
+def get_distribution_over_vocabulary(tok_type: str, alpha: float, NV: int, languages: list[str]) -> (dict, dict):
     
     tok_type_map = {'multilingual': 'sp-unigram',
                     '20l-multilingual': 'sp-unigram',
@@ -319,24 +315,75 @@ def get_distribution_over_vocabulary(tok_type, alpha, NV, languages):
             curr_lang = languages[lang_idx]
             for lang in languages:
                 frequencies_over_vocabulary_new[lang][str(tok_idx)] = frequencies_over_vocabulary[curr_lang][rel_tok_idx] if lang == curr_lang else 0
-            frequencies_over_vocabulary_new['multilingual'][str(tok_idx)] = frequencies_over_vocabulary[curr_lang][rel_tok_idx]
+            frequencies_over_vocabulary_new['All'][str(tok_idx)] = frequencies_over_vocabulary[curr_lang][rel_tok_idx]
         frequencies_over_vocabulary = frequencies_over_vocabulary_new
     else:
         tokenizer_stats_path = os.path.join(TOKENIZERS_DIR, tok_type_map[tok_type], '-'.join(languages),
                                             f"alpha-{alpha}_N-{NV}", f"token_frequencies.json")
         try:
-            frequencies_over_vocabulary['multilingual'] = json.load(open(tokenizer_stats_path, 'r'))
+            frequencies_over_vocabulary['All'] = json.load(open(tokenizer_stats_path, 'r'))
         except FileNotFoundError:
             print(f"Multilingual freq file not found ({tokenizer_stats_path}).")
-        
+    
     distribution_over_vocabulary = dict()
     for lang, freqs in frequencies_over_vocabulary.items():
-        distribution_over_vocabulary[lang] = distribution_from_frequencies(freqs, NV)
+        actual_NV = len(freqs)
+        freqs = OrderedDict([(str(tok), freqs[str(tok)]) for tok in range(actual_NV)])
+        distribution_over_vocabulary[lang] = distribution_from_frequencies(freqs)
+        frequencies_over_vocabulary[lang] = freqs
     
-    return distribution_over_vocabulary
-        
+    return distribution_over_vocabulary, frequencies_over_vocabulary
+    
 
-def get_mlm_results(tok_type, alpha, NV, languages, seed=1234, alpha_train=0.25, metrics=('mrr', 'bpc')):
+def get_distribution_over_decoded_vocabulary(tok_type: str, alpha: float, NV: int, languages: list[str]) -> (dict, dict):
+    
+    tok_type_map = {'multilingual': 'sp-unigram',
+                    '20l-multilingual': 'sp-unigram',
+                    'merged': 'sp-unigram-merged',
+                    '20l-merged': 'sp-unigram-merged',
+                    'nooverlap': 'sp-unigram',
+                    'bpe': 'sp-bpe',
+                    '20l-bpe': 'sp-bpe',
+                    'bpe_nooverlap': 'sp-bpe'}
+    
+    frequencies_over_vocabulary = dict()
+    
+    # monolingual frequencies
+    for lang in languages:
+        if "nooverlap" in tok_type:
+            tokenizer_stats_path = os.path.join(TOKENIZERS_DIR, tok_type_map[tok_type], lang,
+                                                f"alpha-{alpha}_N-{NV//len(languages)}",
+                                                f"token_freq_{lang}_{alpha}_decoded.json")
+        else:
+            tokenizer_stats_path = os.path.join(TOKENIZERS_DIR, tok_type_map[tok_type], '-'.join(languages),
+                                                f"alpha-{alpha}_N-{NV}", f"token_freq_{lang}_{alpha}_decoded.json")
+        try:
+            frequencies_over_vocabulary[lang] = json.load(open(tokenizer_stats_path, 'r'))
+        except FileNotFoundError:
+            print(f"{lang} freq file not found ({tokenizer_stats_path}).")
+            continue
+
+    # multilingual frequency file
+    if "nooverlap" not in tok_type:
+        
+        tokenizer_stats_path = os.path.join(TOKENIZERS_DIR, tok_type_map[tok_type], '-'.join(languages),
+                                            f"alpha-{alpha}_N-{NV}", f"token_frequencies_decoded.json")
+        try:
+            frequencies_over_vocabulary['All'] = json.load(open(tokenizer_stats_path, 'r'))
+        except FileNotFoundError:
+            print(f"Multilingual freq file not found ({tokenizer_stats_path}).")
+
+    distribution_over_vocabulary = dict()
+    for lang, freqs in frequencies_over_vocabulary.items():
+        freqs = OrderedDict([(tok, freq) for tok, freq in sorted(freqs.items(), key=lambda item: item[0])])
+        distribution_over_vocabulary[lang] = distribution_from_frequencies(freqs)
+        frequencies_over_vocabulary[lang] = freqs
+
+    return distribution_over_vocabulary, frequencies_over_vocabulary
+    
+    
+def get_mlm_results(tok_type: str, alpha: float, NV: int, languages: list[str],
+                    seed=1234, alpha_train=0.25, metrics=('mrr', 'bpc')) -> dict:
     """
     tok_type: 'multilingual', 'merged', 'nooverlap', 'bpe', 'bpe-nooverlap'
     """
@@ -363,14 +410,17 @@ def get_mlm_results(tok_type, alpha, NV, languages, seed=1234, alpha_train=0.25,
                 except FileNotFoundError:
                     print(f"{result_file} not found.")
                     res = 0.0
+            except json.JSONDecodeError:
+                print(f"{result_file} couldn't be parsed.")
+                res = 0.0
             results[metric][lang] = res
 
     return results
 
 
 #TODO: write function to get results for downstream tasks
-def get_downstream_results(tok_type, alpha, NV, languages, task, ft_type='PROBE',
-                           seeds=(1234,1235, 1236, 1237, 1238), alpha_train=0.25, metrics=('f1-macro')):
+def get_downstream_results(tok_type: str, alpha: float, NV: int, languages: list[str], task: str,
+                           ft_type='PROBE', seeds=(1234,1235, 1236, 1237, 1238), alpha_train=0.25, metrics=('f1-macro')) -> (dict, dict):
     
     """
     Get results for downstream tasks.
@@ -391,13 +441,20 @@ def get_downstream_results(tok_type, alpha, NV, languages, task, ft_type='PROBE'
             for tgt_lang in languages:
                 results[metric][src_lang][tgt_lang] = []
                 for seed in seeds:
-                    try:
+                    if not ft_type:
+                        result_file = os.path.join(MODELS_DIR, task, f"{tok_type}-tokenization",
+                                                   f"alpha-{alpha}_alpha-train-{alpha_train}_N-{NV}_{seed}",
+                                                   src_lang, f"{metric}_evaluation", tgt_lang, f"{metric}_all.txt")
+                    else:
                         result_file = os.path.join(MODELS_DIR, f"{task}_{ft_type}", f"{tok_type}-tokenization",
                                                    f"alpha-{alpha}_alpha-train-{alpha_train}_N-{NV}_{seed}",
                                                    src_lang, f"{metric}_evaluation", tgt_lang, f"{metric}_all.txt")
+                    try:
                         results[metric][src_lang][tgt_lang].append(json.load(open(result_file, 'r'))[f"eval_{metric}"])
                     except FileNotFoundError:
                         print(f"{result_file} not found.")
+                    except json.JSONDecodeError:
+                        print(f"{result_file} couldn't be parsed.")
                         
                 if len(results[metric][src_lang][tgt_lang]) > 0:
                     results_avg[metric][src_lang][tgt_lang] = np.mean(results[metric][src_lang][tgt_lang])
@@ -409,4 +466,104 @@ def get_downstream_results(tok_type, alpha, NV, languages, task, ft_type='PROBE'
     return results_avg, results_std
     
         
+corpus_sizes = {'en': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 122000000.0,
+                       'alpha0.5': 496000000.0,
+                       'alpha0.75': 2020000000.0,
+                       'alpha1.0': 8200000000.0},
+                'es': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 78400000.0,
+                       'alpha0.5': 205000000.0,
+                       'alpha0.75': 536000000.0,
+                       'alpha1.0': 1400000000.0},
+                'el': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 66900000.0,
+                       'alpha0.5': 149000000.0,
+                       'alpha0.75': 332000000.0,
+                       'alpha1.0': 740000000.0},
+                'zh': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 78400000.0,
+                       'alpha0.5': 205000000.0,
+                       'alpha0.75': 536000000.0,
+                       'alpha1.0': 1400000000.0},
+                'tr': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 61800000.0,
+                       'alpha0.5': 127000000.0,
+                       'alpha0.75': 262000000.0,
+                       'alpha1.0': 540000000.0},
+                'ar': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 61800000.0,
+                       'alpha0.5': 127000000.0,
+                       'alpha0.75': 262000000.0,
+                       'alpha1.0': 540000000.0},
+                'sw': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 30800000.0,
+                       'alpha0.5': 31600000.0,
+                       'alpha0.75': 32400000.0,
+                       'alpha1.0': 33200000.0},
+                'hi': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 51000000.0,
+                       'alpha0.5': 86600000.0,
+                       'alpha0.75': 147000000.0,
+                       'alpha1.0': 250000000.0},
+                'mr': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 30800000.0,
+                       'alpha0.5': 31700000.0,
+                       'alpha0.75': 32500000.0,
+                       'alpha1.0': 33400000.0},
+                'ur': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 39300000.0,
+                       'alpha0.5': 51500000.0,
+                       'alpha0.75': 67500000.0,
+                       'alpha1.0': 88400000.0},
+                'ta': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 43300000.0,
+                       'alpha0.5': 62400000.0,
+                       'alpha0.75': 90100000.0,
+                       'alpha1.0': 130000000.0},
+                'te': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 34700000.0,
+                       'alpha0.5': 40100000.0,
+                       'alpha0.75': 46400000.0,
+                       'alpha1.0': 53600000.0},
+                'th': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 69600000.0,
+                       'alpha0.5': 162000000.0,
+                       'alpha0.75': 375000000.0,
+                       'alpha1.0': 870000000.0},
+                'ru': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 106000000.0,
+                       'alpha0.5': 371000000.0,
+                       'alpha0.75': 1310000000.0,
+                       'alpha1.0': 4600000000.0},
+                'bg': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 70800000.0,
+                       'alpha0.5': 167000000.0,
+                       'alpha0.75': 394000000.0,
+                       'alpha1.0': 930000000.0},
+                'he': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 63700000.0,
+                       'alpha0.5': 135000000.0,
+                       'alpha0.75': 287000000.0,
+                       'alpha1.0': 610000000.0},
+                'ka': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 41500000.0,
+                       'alpha0.5': 57400000.0,
+                       'alpha0.75': 79500000.0,
+                       'alpha1.0': 110000000.0},
+                'vi': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 93200000.0,
+                       'alpha0.5': 290000000.0,
+                       'alpha0.75': 901000000.0,
+                       'alpha1.0': 2800000000.0},
+                'fr': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 78400000.0,
+                       'alpha0.5': 205000000.0,
+                       'alpha0.75': 536000000.0,
+                       'alpha1.0': 1400000000.0},
+                'de': {'alpha0.0': 30000000.0,
+                       'alpha0.25': 83500000.0,
+                       'alpha0.5': 232000000.0,
+                       'alpha0.75': 647000000.0,
+                       'alpha1.0': 1800000000.0}}
 

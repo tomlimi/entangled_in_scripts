@@ -77,10 +77,17 @@ class TatoebaAlignmentDataset(AlignmentDataset):
             language_src, language_tgt = language_tgt, language_src
             tokenizer_src, tokenizer_tgt = tokenizer_tgt, tokenizer_src
             lang_offset_src, lang_offset_tgt = lang_offset_tgt, lang_offset_src
+        try:
+            self.dataset = load_dataset('tatoeba', f'{language_src}-{language_tgt}', split='train')
+        # try to load the dataset with the opposite configuration of languages
+        except FileNotFoundError:
+            language_src, language_tgt = language_tgt, language_src
+            tokenizer_src, tokenizer_tgt = tokenizer_tgt, tokenizer_src
+            lang_offset_src, lang_offset_tgt = lang_offset_tgt, lang_offset_src
+            self.dataset = load_dataset('tatoeba', f'{language_src}-{language_tgt}', split='train')
         
         super().__init__(language_src, language_tgt, tokenizer_src, tokenizer_tgt,
                          max_length, lang_offset_src, lang_offset_tgt, evaluation)
-        self.dataset = load_dataset("tatoeba", lang1=language_src, lang2=language_tgt, split='train')
 
     def get_src_sentences(self, examples):
         return [e[self.language_src] for e in examples['translation']]

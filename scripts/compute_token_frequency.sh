@@ -30,7 +30,7 @@ echo "Name: $experiment_name"
 
 # python compute_token_frequency.py -o ${output_path} -a $alpha -l ${langs[@]} -v $vocab_size -t $type -c
 # identifikace tokenizeru: tokenizer_dir, tokenizer_type, lang, alpha, NV
-python compute_token_frequency.py -o ${output_path} -t $type -l $tokenizer_lang -a $alpha -v $vocab_size -n $experiment_name -c ${data_args}
+python compute_token_frequency.py -o ${output_path} -t $type -l $tokenizer_lang -a $alpha -v $vocab_size -n $experiment_name -d ${data_args}
 
 # Run:
 # sbatch compute_token_frequency.sh 120000 $alpha sp-unigram ar-tr-zh-el-es-en "token_freq_$lang_$alpha" -d $(./pretraining_data_paths.sh $alpha $lang)

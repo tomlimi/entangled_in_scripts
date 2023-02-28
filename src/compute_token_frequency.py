@@ -7,7 +7,7 @@ import json
 from tqdm import tqdm
 from collections import OrderedDict
 
-from transformers import XLMRobertaTokenizerFast
+from transformers import XLMRobertaTokenizerFast, AutoTokenizer
 
 logging.basicConfig(level=logging.INFO)
 
@@ -17,15 +17,15 @@ def get_tokenizer_path(tokenizer_dir, tokenizer_type, lang, alpha, NV):
 
 
 # getting tokenizer
-def get_tokenizer(tokenizer_dir, tokenizer_type, lang, alpha, NV):
-    tokenizer_path = get_tokenizer_path(tokenizer_dir, tokenizer_type, lang, alpha, NV)
+def get_tokenizer(tokenizer_path):
     logging.info(f"Loading tokenizer from {tokenizer_path}")
-    if not os.path.exists(tokenizer_path):
-        raise ValueError(f"Tokenizer not found at {tokenizer_path}")
-    return (
-        XLMRobertaTokenizerFast.from_pretrained(tokenizer_path, unk_token="<unk>"),
-        tokenizer_path,
-    )
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    except ValueError:
+        if not os.path.exists(tokenizer_path):
+            raise ValueError(f"Tokenizer not found at {tokenizer_path}")
+        tokenizer = XLMRobertaTokenizerFast.from_pretrained(tokenizer_path, unk_token="<unk>")
+    return tokenizer
 
 
 def save_token_frequency(tokens_with_freq, decoded_tokens_with_freq, out_path, name):
@@ -64,31 +64,30 @@ def batch(iterator, batch_size):
         yield batch
 
 
-def main(args):
-    alpha = args.alpha
-    vocab_size = args.vocab_size
-    languages = args.languages
+def compute_frequencies(languages, data_list, tokenizer_path, name="token_frequencies",
+                        out_dir=None, alpha=None, vocab_size=None, type=None):
+    """Compute token frequencies for a given tokenizer and data."""
     languages_str = "-".join(languages)
-    data_paths = args.data_list
-    lowercase = not args.cased
-
-    type = args.type
-    out_dir = args.out_dir
 
     # load the tokenizer
-    tokenizer, tokenizer_path = get_tokenizer(
-        out_dir, type, languages_str, alpha, vocab_size
-    )
+    if not tokenizer_path:
+        assert alpha is not None and vocab_size is not None and type is not None and out_dir is not None, (
+            "If no tokenizer path is provided, alpha, vocab_size, type and out_dir must be provided."
+        )
+        tokenizer_path = get_tokenizer_path(out_dir, type, languages_str, alpha, vocab_size)
+        
+    tokenizer = get_tokenizer(tokenizer_path)
 
     # open the train data
     batch_size = 10000
 
     counter = {token_id: 0 for token_id in tokenizer.get_vocab().values()}
-    for data_path in data_paths:
+    for data_path in data_list:
         logging.info(f"Reading lines from {data_path}")
         with open(data_path, "r") as f:
             # go through the file line by line in batches
             # NOTE: we strip the newline character from the end of each line
+            # TODO: maybe we shouldn't do this?
             for line_batch in tqdm(batch(map(lambda s: s.rstrip(), f), batch_size)):
                 for tokenized_line in tokenizer(line_batch)["input_ids"]:
                     for id in tokenized_line:
@@ -101,7 +100,7 @@ def main(args):
     ]
 
     save_token_frequency(
-        tokens_with_freq, decoded_tokens_with_freq, tokenizer_path, args.name
+        tokens_with_freq, decoded_tokens_with_freq, tokenizer_path, name
     )
 
 
@@ -112,20 +111,25 @@ if __name__ == "__main__":
     )
     parser.add_argument("-o", "--out_dir", type=str, required=True)
     parser.add_argument(
-        "-a", "--alpha", type=str, required=True, help="Balancing coefficient alpha."
-    )
-    parser.add_argument(
         "-l",
         "--languages",
         nargs="+",
         required=True,
         help="List of languages the tokenizer was trained on.",
     )
-    parser.add_argument("-v", "--vocab_size", type=int, required=True)
+    
+    # tokenizer parameters
+    parser.add_argument(
+        "--tokenizer_path", type=str, required=False, default=None
+    )
+    parser.add_argument(
+        "-a", "--alpha", type=str, required=False, help="Balancing coefficient alpha."
+    )
+    parser.add_argument("-v", "--vocab_size", type=int, required=False)
     parser.add_argument("-t", "--type", type=str, required=False, default="unigram")
     parser.add_argument(
         "-n", "--name", type=str, required=False, default="token_frequencies"
     )
-    parser.add_argument("-c", "--cased", action="store_true", default=False)
+    
     args = parser.parse_args()
-    main(args)
+    compute_frequencies(**args.__dict__)
