@@ -1,6 +1,6 @@
 ## Entangled in the Scripts
 
-The code for the paper "Tokenization Impacts Multilingual Language Modeling: Assessing Vocabulary Allocation and Overlap Across Languages" by Tomasz Limisiewicz, Jiří Balhar, and David Mareček, and (two first authors developed the code).
+The code for the paper "Tokenization Impacts Multilingual Language Modeling: Assessing Vocabulary Allocation and Overlap Across Languages" by Tomasz Limisiewicz, Jiří Balhar, and David Mareček (two first authors developed the code).
 
 
 In the paper, we discuss the importance of multilingual tokenizer properties (vocabulary allocation and cross-lingual
