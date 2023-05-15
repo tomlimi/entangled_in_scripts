@@ -26,7 +26,7 @@ Open the working directory with scripts
 cd entangled_in_scripts/scripts
 ```
 
-## Evaluate the tokenizer
+## Evaluate tokenizers
 
 The script `evaluate_tokenizer.py` loads tokenizer (pre-saved or from hugging face) and evaluates on metrics described in the paper:
 - Vocabulary Overlap measured by Jensen-Shannon divergence between in-language distributions;
