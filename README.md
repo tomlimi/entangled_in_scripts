@@ -152,10 +152,21 @@ where <language_src> is the language of the fine-tuned model and <language_tgt> 
 
 
 ## Bibtex
-TODO: provide bibtex key.
 
 If you use the code, please cite the paper:
 ```bibtex
-
+@inproceedings{limisiewicz-etal-2023-tokenization,
+    title = "Tokenization Impacts Multilingual Language Modeling: Assessing Vocabulary Allocation and Overlap Across Languages",
+    author = "Limisiewicz, Tomasz  and
+      Balhar, Ji{\v{r}}{\'\i}  and
+      Mare{\v{c}}ek, David",
+    booktitle = "Findings of the Association for Computational Linguistics: ACL 2023",
+    month = jul,
+    year = "2023",
+    address = "Toronto, Canada",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2023.findings-acl.350",
+    doi = "10.18653/v1/2023.findings-acl.350",
+    pages = "5661--5681"}
 
 ```
