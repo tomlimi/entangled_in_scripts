@@ -34,9 +34,8 @@ import logging
 from collections import defaultdict
 from itertools import combinations
 
-from compute_token_frequency import compute_frequencies
+from compute_token_frequency import compute_frequencies, get_tokenizer
 from utils import get_distributions_over_decoded_vocabulary_default
-
 
 logging.basicConfig(level=logging.INFO)
 
@@ -44,16 +43,15 @@ UNK_TOKEN = "<unk>"
 
 
 def compute_number_of_characters(lang2data: dict[str, list[str]]) -> dict[str, int]:
-    
     number_of_characters = defaultdict(int)
-    
+
     for lang, data_paths in lang2data.items():
         for data_path in data_paths:
             with open(data_path, "r") as data_f:
                 for line in data_f:
                     number_of_characters[lang] += len(line)
                     number_of_characters["All"] += len(line)
-                
+
     return number_of_characters
 
 
@@ -71,7 +69,6 @@ def get_properties(languages, out_dir, number_of_characters, unk_token=UNK_TOKEN
     
     vocab_distributions, vocab_frequencies = \
         get_distributions_over_decoded_vocabulary_default(out_dir, languages)
-    
     
     languages = list(set(languages)) + ["All"]
     vocab_distributions_arr = {lang: np.array(list(vocab_distributions[lang].values())) for lang in languages}
@@ -118,11 +115,15 @@ def main(args):
     logging.info(f"Looking for tokenizer at {tokenizer_path}")
     
     if not os.path.exists(tokenizer_path):
+        os.makedirs(args.output_path, exist_ok=True)
         logging.info("Tokenizer not found. Downloading tokenizer from HF.")
         tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
         logging.info(f"Saving tokenizer to {tokenizer_path}")
         tokenizer.save_pretrained(tokenizer_path)
-    
+
+    # load the tokenizer (even if the files are pre-tokenized, we need some info about from the tokenizer itself)
+    tokenizer = get_tokenizer(tokenizer_path)
+
     lang2data = defaultdict(list)
     for lang, data_path in zip(args.languages, args.data_list):
         lang2data[lang].append(data_path)
@@ -130,18 +131,19 @@ def main(args):
     for lang, data_paths in lang2data.items():
         if not path.exists(os.path.join(tokenizer_path, f"token_freq_{lang}_decoded.json")):
             logging.info(f"Computing token frequencies for {lang}")
-            compute_frequencies(args.languages, data_paths, tokenizer_path, name=f'token_freq_{lang}')
+            compute_frequencies(data_paths, tokenizer=tokenizer, name=f'token_freq_{lang}',
+                                pretokenized=args.pretokenized, output_path=tokenizer_path)
     if not path.exists(os.path.join(tokenizer_path, "token_frequencies_decoded.json")):
-        compute_frequencies(args.languages, args.data_list, tokenizer_path)
-    
+        compute_frequencies(args.data_list, tokenizer, pretokenized=args.pretokenized, output_path=tokenizer_path)
+
     number_of_characters = compute_number_of_characters(lang2data)
 
     t_properties = get_properties(args.languages, tokenizer_path, number_of_characters, args.unk_token)
 
-    output_path = os.path.join(tokenizer_path, "tokenizer_properties.json")
+    output_file = os.path.join(tokenizer_path, "tokenizer_properties.json")
     # save results
-    logging.info(f"Saving tokenizer properties to {output_path}")
-    with open(output_path, "w") as f:
+    logging.info(f"Saving tokenizer properties to {output_file}")
+    with open(output_file, "w") as f:
         json.dump(t_properties, f, indent=4)
 
 
@@ -151,8 +153,9 @@ if __name__ == "__main__":
         "-d", "--data_list", nargs="+", help="<Required> Set flag", required=True
     )
     parser.add_argument(
-        "-l", "--languages", nargs="+", help="List of languages the tokenizer was trained on.", required=True,
+        "-l", "--languages", nargs="+", help="List of languages the data files are in.", required=True,
     )
+    parser.add_argument("--pretokenized", action="store_true")
     parser.add_argument(
         "-t", "--tokenizer_name", type=str, help="Path to tokenizer", required=True
     )

@@ -1,7 +1,10 @@
 import json
 import os
 from collections import OrderedDict
+
 from transformers import XLMRobertaTokenizerFast
+
+from notebooks.notebook_utils import distribution_from_frequencies
 
 
 def load_config(config_path):
@@ -27,26 +30,22 @@ def get_tokenizer_from_model_config(model_config, language):
 
     return tokenizer, lang_offset
 
-import os
-from collections import OrderedDict
-
-from notebooks.notebook_utils import distribution_from_frequencies
-
 
 def load_config(config_path):
     with open(config_path, 'r') as fp:
         return json.load(fp)
-    
-    
-def get_distributions_over_decoded_vocabulary_default(result_dir: str, languages: list[str]) -> (OrderedDict, OrderedDict):
+
+
+def get_distributions_over_decoded_vocabulary_default(tokenizer_dir: str, languages: list[str]) -> (
+        OrderedDict, OrderedDict):
     """
     Get the distribution over the vocabulary for each language. For given tokenizer.
     """
-    
+
     frequencies_over_vocabulary = {}
     for lang in languages:
-        tokenizer_stats_path = os.path.join(result_dir, f"token_freq_{lang}_decoded.json")
-        
+        tokenizer_stats_path = os.path.join(tokenizer_dir, f"token_freq_{lang}_decoded.json")
+
         try:
             frequencies_over_vocabulary[lang] = json.load(open(tokenizer_stats_path, 'r'))
         except FileNotFoundError:
@@ -54,8 +53,8 @@ def get_distributions_over_decoded_vocabulary_default(result_dir: str, languages
             continue
             
     # multilingual frequency file
-    tokenizer_stats_path = os.path.join(result_dir, f"token_frequencies_decoded.json")
-    
+    tokenizer_stats_path = os.path.join(tokenizer_dir, f"token_frequencies_decoded.json")
+
     try:
         frequencies_over_vocabulary["All"] = json.load(open(tokenizer_stats_path, 'r'))
     except FileNotFoundError:
