@@ -5,7 +5,7 @@ import argparse
 import sys
 import json
 from tqdm import tqdm
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 
 from transformers import XLMRobertaTokenizerFast, AutoTokenizer
 
@@ -32,15 +32,17 @@ def save_token_frequency(tokens_with_freq, decoded_tokens_with_freq, out_path, n
     """Function to save token frequencies and log arguments to a file"""
 
     # copy current script to the output directory
-    shutil.copyfile(sys.argv[0], os.path.join(out_path, "{name}_script.py"))
+    shutil.copyfile(sys.argv[0], os.path.join(out_path, f"{name}_script.py"))
     # save the arguments
-    with open(os.path.join(out_path, "{name}_args.txt"), "w") as log_file:
+    with open(os.path.join(out_path, f"{name}_args.txt"), "w") as log_file:
         log_file.write(" ".join(sys.argv[1:]))
 
     for save_name, save_object in [
         (f"{name}.json", tokens_with_freq),
         (f"{name}_decoded.json", decoded_tokens_with_freq),
     ]:
+        if not save_object:
+            continue
         save_path = os.path.join(out_path, save_name)
         with open(save_path, "w", encoding="utf-8") as outfile:
             logging.info(f"Writing frequencies to {save_path}")
@@ -64,24 +66,13 @@ def batch(iterator, batch_size):
         yield batch
 
 
-def compute_frequencies(languages, data_list, tokenizer_path, name="token_frequencies",
-                        out_dir=None, alpha=None, vocab_size=None, type=None):
+def compute_frequencies(data_list, tokenizer, name="token_frequencies", pretokenized=False, output_path=None):
     """Compute token frequencies for a given tokenizer and data."""
-    languages_str = "-".join(languages)
-
-    # load the tokenizer
-    if not tokenizer_path:
-        assert alpha is not None and vocab_size is not None and type is not None and out_dir is not None, (
-            "If no tokenizer path is provided, alpha, vocab_size, type and out_dir must be provided."
-        )
-        tokenizer_path = get_tokenizer_path(out_dir, type, languages_str, alpha, vocab_size)
-        
-    tokenizer = get_tokenizer(tokenizer_path)
 
     # open the train data
     batch_size = 10000
-
-    counter = {token_id: 0 for token_id in tokenizer.get_vocab().values()}
+    vocab = tokenizer.get_vocab()
+    counter = {token_id: 0 for token_id in vocab.values()}
     for data_path in data_list:
         logging.info(f"Reading lines from {data_path}")
         with open(data_path, "r") as f:
@@ -89,18 +80,24 @@ def compute_frequencies(languages, data_list, tokenizer_path, name="token_freque
             # NOTE: we strip the newline character from the end of each line
             # TODO: maybe we shouldn't do this?
             for line_batch in tqdm(batch(map(lambda s: s.rstrip(), f), batch_size)):
-                for tokenized_line in tokenizer(line_batch)["input_ids"]:
-                    for id in tokenized_line:
-                        counter[id] += 1
+                if pretokenized:
+                    for tokenized_line in line_batch:
+                        for tok in tokenized_line.split():
+                            idx = vocab[tok]
+                            counter[idx] += 1
+                else:
+                    for tokenized_line in tokenizer(line_batch)["input_ids"]:
+                        for idx in tokenized_line:
+                            counter[idx] += 1
 
-    id_to_token = {v: k for k, v in tokenizer.get_vocab().items()}
+    id_to_token = {v: k for k, v in vocab.items()}
     tokens_with_freq = sorted(counter.items(), key=lambda x: x[1], reverse=True)
     decoded_tokens_with_freq = [
         (id_to_token[token_id], freq) for token_id, freq in tokens_with_freq
     ]
 
     save_token_frequency(
-        tokens_with_freq, decoded_tokens_with_freq, tokenizer_path, name
+        tokens_with_freq, decoded_tokens_with_freq, output_path, name
     )
 
 
@@ -132,4 +129,15 @@ if __name__ == "__main__":
     )
     
     args = parser.parse_args()
-    compute_frequencies(**args.__dict__)
+    languages_str = "-".join(args.languages)
+
+    # load the tokenizer
+    if not args.tokenizer_path:
+        assert args.alpha is not None and args.vocab_size is not None and type is not None and args.out_dir is not None, (
+            "If no tokenizer path is provided, alpha, vocab_size, type and out_dir must be provided."
+        )
+        tokenizer_path = get_tokenizer_path(args.out_dir, type, languages_str, args.alpha, args.vocab_size)
+
+    tokenizer = get_tokenizer(tokenizer_path)
+    compute_frequencies(data_list=args.data_list, tokenizer=tokenizer, name=args.name, pretokenized=False,
+                        output_path=args.out_dir or tokenizer_path)
