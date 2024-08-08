@@ -32,7 +32,7 @@ The script `evaluate_tokenizer.py` loads tokenizer (pre-saved or from hugging fa
 - Vocabulary Overlap measured by Jensen-Shannon divergence between in-language distributions;
 - Vocabulary Allocation measured by average rank of the token in in-language distribution.
 - Vocabulary Allocation measured by the average number of characters for a token in specific language.
-- Coverage, i.e. 1 - the share of unkown tokens in the tokenized text.
+- Coverage, i.e. 1 - the share of unknown tokens in the tokenized text.
 
 The results are saved as a json file `tokenizer_properties.json`. To run the evaluation run the following command (with exemplary parameters):
 
@@ -42,7 +42,8 @@ python evaluate_tokenizer.py \
     --languages en en es pl \
     --tokenizer_name xlm-roberta-base \
     --output_dir /home/tokenizers_evaluation \
-    [--unk_token <unk>]
+    [--unk_token <unk>] \
+    [--pretokenized]
 ```
 
 The explanation of the parameters:
@@ -50,8 +51,9 @@ The explanation of the parameters:
 - languages: listed languages of the data for each data path
 - tokenizer_name: HF tokenizer name or name of the tokenizer pre-saved in the output directory
 - output_dir: path to output directory to save the results
-- unk_token: optional, the unkonwn token in the vocabulary (by default `<unk>`)
-
+- unk_token: optional, the unknown token in the vocabulary (by default `<unk>`)
+- pretokenized: optional (default=False), use if data was previously tokenized by a specific subword tokenizer, and saved with spaces between subwords.
+  `tokenizer_name` must match the tokenizer that was used.
 
 ## Reproducing the experiments
 

@@ -83,8 +83,13 @@ def compute_frequencies(data_list, tokenizer, name="token_frequencies", pretoken
                 if pretokenized:
                     for tokenized_line in line_batch:
                         for tok in tokenized_line.split():
-                            idx = vocab[tok]
-                            counter[idx] += 1
+                            try:
+                                idx = vocab[tok]
+                                counter[idx] += 1
+                            except KeyError as e:
+                                print(f"Token '{tok}' not in vocabulary. Please ensure the tokenizer matches the "
+                                      f"tokenized data.")
+                                raise e
                 else:
                     for tokenized_line in tokenizer(line_batch)["input_ids"]:
                         for idx in tokenized_line:
